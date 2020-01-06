@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Statics.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">model</a> &gt; <span class="el_source">Statics.scala</span></div><h1>Statics.scala</h1><pre class="source lang-java linenums">package model
+
+import org.joda.time.{ DateTime, DateTimeZone }
+
+/**
+ * Statics
+ *
+ * @author damon lin
+ *         2018/12/18
+ */
+<span class="fc" id="L11">object Statics {</span>
+
+<span class="nc" id="L13">  object ActionTargetProto {</span>
+<span class="nc" id="L14">    val OpenApp = &quot;openApp&quot;</span>
+<span class="nc" id="L15">    val OpenH5 = &quot;openH5&quot;</span>
+<span class="nc" id="L16">    val OpenUrl = &quot;openUrl&quot;</span>
+<span class="nc" id="L17">    val Custom = &quot;custom&quot;</span>
+  }
+
+<span class="pc" id="L20">  val InAppMessageDomain = Some(&quot;inAppMessage&quot;)</span>
+<span class="pc" id="L21">  val PushMessageDomain = Some(&quot;pushMessage&quot;)</span>
+  // 全局事件的key 和 name
+<span class="pc" id="L23">  val STATIC_MESSAGE_CLOSE_EVENT_NAME = &quot;关闭弹窗&quot;</span>
+<span class="pc" id="L24">  val STATIC_MESSAGE_CLOSE_EVENT_KEY = &quot;in_app_message_close&quot;</span>
+<span class="pc" id="L25">  val STATIC_MESSAGE_IMP_EVENT_NAME = &quot;弹窗展示&quot;</span>
+<span class="pc" id="L26">  val STATIC_MESSAGE_IMP_EVENT_KEY = &quot;in_app_message_imp&quot;</span>
+<span class="pc" id="L27">  val STATIC_CTA_CLICK_EVENT_NAME = &quot;弹窗点击&quot;</span>
+<span class="pc" id="L28">  val STATIC_CTA_CLICK_EVENT_KEY = &quot;in_app_message_cmp_click&quot;</span>
+  // 事件级变量的名称
+<span class="pc" id="L30">  val EVENT_LEVEL_VAR_MESSAGE_NAME = &quot;弹窗名称&quot;</span>
+<span class="pc" id="L31">  val EVENT_LEVEL_VAR_MESSAGE_NAME_KEY = &quot;in_app_message_name&quot;</span>
+
+<span class="pc" id="L33">  val EVENT_LEVEL_VAR_MESSAGE_TYPE = &quot;站内消息类型&quot;</span>
+<span class="pc" id="L34">  val EVENT_LEVEL_VAR_MESSAGE_TYPE_KEY = &quot;gio_message_type&quot;</span>
+<span class="pc" id="L35">  val EVENT_LEVEL_VAR_MESSAGE_ID = &quot;站内消息 id&quot;</span>
+<span class="pc" id="L36">  val EVENT_LEVEL_VAR_MESSAGE_ID_KEY = &quot;gio_message_id&quot;</span>
+<span class="pc" id="L37">  val EVENT_LEVEL_VAR_MESSAGE_INDEX = &quot;站内消息位置&quot;</span>
+<span class="pc" id="L38">  val EVENT_LEVEL_VAR_MESSAGE_INDEX_KEY = &quot;gio_message_index&quot;</span>
+<span class="pc" id="L39">  val EVENT_LEVEL_VAR_CAMPAIGN_KEY = &quot;站内消息活动 key&quot;</span>
+<span class="pc" id="L40">  val EVENT_LEVEL_VAR_CAMPAIGN_KEY_KEY = &quot;gio_campaign_key&quot;</span>
+
+  // push事件定义
+<span class="pc" id="L43">  val STATIC_PUSH_MESSAGE_SENT_EVENT_NAME = &quot;消息发送&quot;</span>
+<span class="pc" id="L44">  val STATIC_PUSH_MESSAGE_SENT_EVENT_KEY = &quot;gio_push_message_sent&quot;</span>
+<span class="pc" id="L45">  val STATIC_PUSH_MESSAGE_IMP_EVENT_NAME = &quot;消息送达&quot;</span>
+<span class="pc" id="L46">  val STATIC_PUSH_MESSAGE_IMP_EVENT_KEY = &quot;gio_push_message_arrived&quot;</span>
+<span class="pc" id="L47">  val STATIC_PUSH_MESSAGE_CLICK_EVENT_NAME = &quot;消息点击&quot;</span>
+<span class="pc" id="L48">  val STATIC_PUSH_MESSAGE_CLICK_EVENT_KEY = &quot;gio_push_message_clicked&quot;</span>
+
+  // push事件级变量的名称(gio_push_message_title已废弃，新的用gio_push_message_name上报埋点)
+<span class="pc" id="L51">  val PUSH_MESSAGE_EVENT_LEVEL_VAR_NAME = &quot;消息标题&quot;</span>
+<span class="pc" id="L52">  val PUSH_MESSAGE_EVENT_LEVEL_VAR_KEY = &quot;gio_push_message_title&quot;</span>
+<span class="pc" id="L53">  val EVENT_LEVEL_VAR_PUSH_MESSAGE_NAME_NAME = &quot;触达推送名称&quot;</span>
+<span class="pc" id="L54">  val EVENT_LEVEL_VAR_PUSH_MESSAGE_NAME_KEY = &quot;gio_push_message_name&quot;</span>
+
+<span class="pc" id="L56">  val PushVariables = Seq(&quot;vstr_gio_push_package&quot;, &quot;vstr_gio_push_channel&quot;, &quot;vstr_gio_push_token&quot;)</span>
+
+<span class="pc" id="L58">  val VISITOR_VAR_PUSH_PACKAGE_KEY = &quot;gio_push_package&quot;</span>
+<span class="pc" id="L59">  val VISITOR_VAR_PUSH_PACKAGE_NAME = &quot;触达推送包名&quot;</span>
+<span class="pc" id="L60">  val VISITOR_VAR_PUSH_CHANNEL_KEY = &quot;gio_push_channel&quot;</span>
+<span class="pc" id="L61">  val VISITOR_VAR_PUSH_CHANNEL_NAME = &quot;触达推送通道&quot;</span>
+<span class="pc" id="L62">  val VISITOR_VAR_PUSH_TOKEN_KEY = &quot;gio_push_token&quot;</span>
+<span class="pc" id="L63">  val VISITOR_VAR_PUSH_TOKEN_NAME = &quot;触达推送令牌&quot;</span>
+<span class="pc" id="L64">  val VISITOR_VAR_PUSH_NOTIFICATION_ENABLE_KEY = &quot;gio_notification_enabled&quot;</span>
+<span class="pc" id="L65">  val VISITOR_VAR_PUSH_NOTIFICATION_ENABLE_NAME = &quot;触达推送权限开关&quot;</span>
+
+<span class="pc" id="L67">  val PushInsightDirection = &quot;down&quot;</span>
+
+  // 指标类型
+<span class="pc" id="L70">  val GLOBAL = &quot;global&quot;</span>
+<span class="pc" id="L71">  val PUSH_GLOBAL = &quot;push_global&quot;</span>
+<span class="pc" id="L72">  val SPECIFIC = &quot;specific&quot;</span>
+
+<span class="pc" id="L74">  val PLUS_COUNT = Some(1)</span>
+<span class="pc" id="L75">  val DECREASE_COUNT = Some(-1)</span>
+
+<span class="pc" id="L77">  val REBUILD_FAILURE_TASK_LOCK = &quot;REBUILD_FAILURE_TASK_LOCK&quot;</span>
+
+<span class="pc" id="L79">  val iOSPushChannelName = &quot;iOSPushChannelName&quot;</span>
+
+<span class="fc" id="L81">  val TOPIC_PUSH_REQUEST = &quot;push.request&quot;</span>
+<span class="fc" id="L82">  val TOPIC_PUSH_RESULT = &quot;channel.result&quot;</span>
+<span class="fc" id="L83">  val TOPIC_CHANNEL_PUSH = &quot;channel.push&quot;</span>
+<span class="fc" id="L84">  val TOPIC_SMS_TASK = &quot;sms.subtask&quot;</span>
+
+<span class="pc" id="L86">  val RULE_DEFAULT_START_AT = 946656000000L</span>
+<span class="pc" id="L87">  val RULE_DEFAULT_END_AT = 4102416000000L</span>
+
+<span class="fc" id="L89">  object ChannelName {</span>
+<span class="fc" id="L90">    val XiaoMi = &quot;Xiaomi&quot;</span>
+<span class="fc" id="L91">    val Huawei = &quot;Huawei&quot;</span>
+<span class="fc" id="L92">    val Meizu = &quot;Meizu&quot;</span>
+<span class="fc" id="L93">    val Oppo = &quot;Oppo&quot;</span>
+<span class="fc" id="L94">    val Vivo = &quot;Vivo&quot;</span>
+<span class="fc" id="L95">    val iOS = &quot;APNs&quot;</span>
+<span class="pc" id="L96">    val WeChatMinP = &quot;minp&quot;</span>
+  }
+
+<span class="pc" id="L99">  val PushChannelLimit = Map(</span>
+<span class="fc" id="L100">    ChannelName.XiaoMi -&gt; 1000,</span>
+<span class="fc" id="L101">    ChannelName.Huawei -&gt; 100, //SDK2.0只有100，3.0有1000，目前我们还在用2.0</span>
+<span class="fc" id="L102">    ChannelName.Meizu -&gt; 1000,</span>
+<span class="fc" id="L103">    ChannelName.Oppo -&gt; 1000,</span>
+<span class="fc" id="L104">    ChannelName.Vivo -&gt; 1000,</span>
+<span class="fc" id="L105">    ChannelName.iOS -&gt; 1000 //发送的时候其实是逐条发的，这里也做个限制，避免task下token数量过多</span>
+  )
+
+<span class="nc" id="L108">  object Protocol {</span>
+<span class="nc" id="L109">    val HTTP = &quot;http://&quot;</span>
+<span class="nc" id="L110">    val HTTPS = &quot;https://&quot;</span>
+<span class="nc" id="L111">    val GINAPP = &quot;GInApp://&quot;</span>
+  }
+
+  //apple推送渠道，生产环境和开发环境在push_channel表name前缀
+<span class="nc" id="L115">  object ApnsEnv {</span>
+<span class="nc" id="L116">    val PROD = &quot;prod&quot;</span>
+<span class="nc" id="L117">    val DEV = &quot;dev&quot;</span>
+  }
+
+<span class="nc" id="L120">  object Queue {</span>
+<span class="nc" id="L121">    val FLUSH_MESSAGE_CACHE = &quot;FLUSH_MESSAGE_CACHE&quot;</span>
+  }
+
+<span class="pc" id="L124">  val LifeJourneyTemplate = Map(&quot;default&quot; -&gt; {</span>
+<span class="fc" id="L125">    Seq(</span>
+<span class="fc" id="L126">      (1, &quot;新手用户&quot;, &quot;新手用户是您产品中「低价值高潜力」的用户群体，他们通过各种拉新手段，如广告投放、用户商店、事件营销等接触到您的应用。这时应说明为什么您的产品值得使用，并将他们带入一个“啊哈时刻”。&quot;),</span>
+<span class="fc" id="L127">      (2, &quot;激活用户&quot;, &quot;激活用户是您产品中「高价值高潜力」的用户群体，他们了解您的产品如何解决他们的需求，并且为此感到高兴！此时应专注于帮助他们实现您所承诺的价值，个性化运营这批用户将为您带来巨大的价值。&quot;),</span>
+<span class="fc" id="L128">      (3, &quot;成熟用户&quot;, &quot;成熟用户是您产品中「高价值低潜力」的用户群体，他们经常使用您的产品，对您的产品非常熟悉，此时可以让他们参与产品改进，并确保他们发现您能够提供的所有价值，努力运营他们，让他们成为您产品的忠实用户，这将有很大的可能为您带来新的流量。&quot;),</span>
+<span class="fc" id="L129">      (4, &quot;超级用户&quot;, &quot;超级用户是您产品中「超高价值」的用户群体，他们之所以向其他人介绍您的产品是因为他们喜欢它，他们是您产品的忠实用户。此时您应该鼓励他们公开支持他们（推荐是健康成长的关键）。制定相应的关怀计划。&quot;))</span>
+  })
+
+<span class="nc" id="L132">  object Platform {</span>
+<span class="nc" id="L133">    val ios = &quot;ios&quot;</span>
+<span class="nc" id="L134">    val android = &quot;android&quot;</span>
+  }
+<span class="pc" id="L136">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

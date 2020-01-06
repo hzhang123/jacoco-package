@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushDeviceDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">PushDeviceDao.scala</span></div><h1>PushDeviceDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import io.growing.marketing.common.model.PushDevice
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import javax.inject.Inject
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.lifted.{ Rep, Tag }
+
+import scala.concurrent.Future
+
+<span class="nc" id="L13">class PushDevicesTable(tag: Tag) extends BaseTable[PushDevice](tag, &quot;push_devices&quot;) {</span>
+<span class="nc" id="L14">  def name: Rep[String] = column[String](&quot;name&quot;)</span>
+
+<span class="nc" id="L16">  def productId: Rep[Int] = column[Int](&quot;product_id&quot;)</span>
+
+<span class="nc" id="L18">  def platform: Rep[String] = column[String](&quot;platform&quot;)</span>
+
+<span class="nc" id="L20">  def brand: Rep[String] = column[String](&quot;brand&quot;)</span>
+
+<span class="nc" id="L22">  def channelId: Rep[Option[Int]] = column[Option[Int]](&quot;channel_id&quot;)</span>
+
+<span class="nc" id="L24">  def channelName: Rep[String] = column[String](&quot;channel_name&quot;)</span>
+
+<span class="nc" id="L26">  def sdkVersion: Rep[String] = column[String](&quot;sdk_version&quot;)</span>
+
+<span class="nc" id="L28">  def appVersion: Rep[String] = column[String](&quot;app_version&quot;)</span>
+
+<span class="nc" id="L30">  def deviceId: Rep[String] = column[String](&quot;device_id&quot;)</span>
+
+<span class="nc" id="L32">  def regId: Rep[String] = column[String](&quot;reg_id&quot;)</span>
+
+<span class="nc" id="L34">  override def * = (id.?, projectId, name, productId, platform, brand, channelId, channelName, sdkVersion, appVersion,</span>
+<span class="nc" id="L35">    deviceId, regId, creatorId, updaterId, state, createdAt, updatedAt) &lt;&gt; ((PushDevice.apply _).tupled, PushDevice.unapply)</span>
+}
+
+<span class="fc" id="L38">class PushDeviceDao @Inject() (override protected val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="fc" id="L39">  extends BaseDao[PushDevicesTable, PushDevice] with HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="pc" id="L41">  override val table = TableQuery[PushDevicesTable]</span>
+
+<span class="nc bnc" id="L43" title="All 4 branches missed.">  override lazy val insertQuery = table returning table.map(_.id) into ((Device, id) =&gt; Device.copy(id = Option(id)))</span>
+
+<span class="nc" id="L45">  override def insert(models: Seq[PushDevice]): Future[Seq[PushDevice]] = super.insert(models)</span>
+
+<span class="nc" id="L47">  override def update(projectId: Int, id: Int, model: PushDevice): Future[Int] = super.update(projectId, id, model)</span>
+
+<span class="nc" id="L49">  override def deleteById(projectId: Int, id: Int): Future[Int] = super.deleteById(projectId, id)</span>
+
+  def findByName(projectId: Int, name: String): Future[Option[PushDevice]] = {
+<span class="nc" id="L52">    db.run(table.filter(d =&gt; d.projectId === projectId &amp;&amp; d.name === name &amp;&amp; d.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findByNameInOthers(projectId: Int, deviceId: Int, name: String): Future[Option[PushDevice]] = {
+<span class="nc" id="L56">    db.run(table.filter(d =&gt; d.projectId === projectId &amp;&amp; d.id =!= deviceId &amp;&amp; d.name === name &amp;&amp; d.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findDeviceWithoutChannelId(projectId: Int, productId: Int, channelName: String): Future[Seq[PushDevice]] = {
+<span class="nc" id="L60">    db.run(table.filter(d =&gt; d.projectId === projectId &amp;&amp; d.productId === productId &amp;&amp; d.channelName === channelName).result)</span>
+  }
+
+  def updateChannelId(deviceId: Int, channelId: Option[Int]): Future[Int] = {
+<span class="nc" id="L64">    db.run(table.filter(d =&gt; d.id === deviceId).map(d =&gt; d.channelId).update(channelId))</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

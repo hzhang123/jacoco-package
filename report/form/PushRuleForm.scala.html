@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushRuleForm.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">form</a> &gt; <span class="el_source">PushRuleForm.scala</span></div><h1>PushRuleForm.scala</h1><pre class="source lang-java linenums">package form
+
+import io.growing.marketing.common.model._
+import io.growing.marketing.common.model.PushRuleType.PushRuleType
+import play.api.libs.functional.syntax._
+import io.growing.micros.business.model.{ Product, Status }
+import org.joda.time.{ DateTime, DateTimeZone }
+import play.api.libs.json._
+import play.api.libs.json.Reads.min
+
+<span class="nc bnc" id="L11" title="All 102 branches missed.">final case class PushRuleForm(</span>
+<span class="nc" id="L12">  `type`: Option[PushRuleType],</span>
+<span class="nc" id="L13">  action: Option[String], // 触发的动作</span>
+<span class="nc" id="L14">  triggerFilter: Option[TriggerFilter], // 事件触发过滤</span>
+<span class="nc" id="L15">  targets: Option[List[PushRuleTarget]], // 触发对象</span>
+<span class="nc" id="L16">  limit: Option[Int],</span>
+<span class="nc" id="L17">  scheduleAt: Option[Int],</span>
+<span class="nc" id="L18">  activatedAt: Option[Long],</span>
+<span class="nc" id="L19">  startAt: Option[Long], // 消息开始有效的时间</span>
+<span class="nc" id="L20">  endAt: Option[Long], // 消息失效的时间</span>
+<span class="nc" id="L21">  triggerDelay: Option[Int], // 触发后延迟执行的时间，单位秒</span>
+<span class="nc" id="L22">  triggerCd: Option[Int], // 两处触发的间隔时间，单位秒</span>
+<span class="nc" id="L23">  productIds: Option[List[String]],</span>
+<span class="nc" id="L24">  triggerPages: Option[List[String]]) {</span>
+
+<span class="nc" id="L26">  def toPushRule(message: PushMessage, product: Option[Product] = None, targets: Option[PushRuleTarget] = None,</span>
+<span class="nc" id="L27">    wxQrCode: Option[String] = None): PushRule = {</span>
+<span class="nc bnc" id="L28" title="All 6 branches missed.">    val realSate = if (message.`type` == MessageType.banner) Status.draft else Status.activated</span>
+<span class="nc" id="L29">    val p = PushRule(</span>
+<span class="nc" id="L30">      None,</span>
+<span class="nc" id="L31">      message.dbid,</span>
+<span class="nc" id="L32">      product.flatMap(_.urlSchema).getOrElse(&quot;&quot;),</span>
+<span class="nc" id="L33">      product.map(_.dbid),</span>
+<span class="nc" id="L34">      `type`,</span>
+<span class="nc" id="L35">      realSate, // banner 位的消息初始为 draft 上线后改为 activated</span>
+<span class="nc" id="L36">      limit,</span>
+<span class="nc" id="L37">      scheduleAt,</span>
+<span class="nc" id="L38">      action,</span>
+<span class="nc" id="L39">      triggerFilter.getOrElse(TriggerFilter.empty()),</span>
+<span class="nc" id="L40">      targets.map(_.`type`),</span>
+<span class="nc" id="L41">      targets.map(_.url),</span>
+<span class="nc" id="L42">      targets.map(_.parameters).getOrElse(Map.empty),</span>
+<span class="nc" id="L43">      None,</span>
+<span class="nc" id="L44">      message.creatorId,</span>
+<span class="nc" id="L45">      message.updaterId,</span>
+<span class="nc" id="L46">      activatedAt.map(new DateTime(_).withZone(DateTimeZone.UTC)),</span>
+<span class="nc" id="L47">      startAt.map(new DateTime(_).withZone(DateTimeZone.UTC)).getOrElse(new DateTime(2000, 1, 1, 0, 0)),</span>
+<span class="nc" id="L48">      endAt.map(new DateTime(_).withZone(DateTimeZone.UTC)).getOrElse(new DateTime(2100, 1, 1, 0, 0)),</span>
+<span class="nc" id="L49">      triggerPages.getOrElse(List[String]()),</span>
+<span class="nc" id="L50">      triggerDelay.getOrElse(0),</span>
+<span class="nc" id="L51">      triggerCd.getOrElse(0))</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">    if (!message.platform.equals(MessagePlatform.App)) {</span>
+<span class="nc" id="L53">      p.copy(triggerFilter = TriggerFilter(&quot;&amp;&amp;&quot;, Seq(Condition.buildFromBackwardMsg(action.get, `type`.get.toString))))</span>
+    } else {
+<span class="nc" id="L55">      p</span>
+    }
+  }
+
+<span class="nc" id="L59">  def buildFromAbTestMsg(msg: AbTestMessage, product: Option[Product] = None, targets: Option[PushRuleTarget] = None): PushRule = {</span>
+<span class="nc" id="L60">    PushRule(</span>
+<span class="nc" id="L61">      None,</span>
+<span class="nc" id="L62">      msg.id.getOrElse(-1),</span>
+<span class="nc" id="L63">      product.flatMap(_.urlSchema).getOrElse(&quot;&quot;),</span>
+<span class="nc" id="L64">      product.map(_.dbid),</span>
+<span class="nc" id="L65">      `type`,</span>
+<span class="nc" id="L66">      msg.state,</span>
+<span class="nc" id="L67">      limit,</span>
+<span class="nc" id="L68">      scheduleAt,</span>
+<span class="nc" id="L69">      action,</span>
+<span class="nc" id="L70">      triggerFilter.getOrElse(TriggerFilter(&quot;&quot;, Seq.empty)),</span>
+<span class="nc" id="L71">      targets.map(_.`type`),</span>
+<span class="nc" id="L72">      targets.map(_.url),</span>
+<span class="nc" id="L73">      targets.map(_.parameters).getOrElse(Map.empty),</span>
+<span class="nc" id="L74">      None,</span>
+<span class="nc" id="L75">      msg.creatorId,</span>
+<span class="nc" id="L76">      msg.updaterId,</span>
+<span class="nc" id="L77">      activatedAt.map(new DateTime(_).withZone(DateTimeZone.UTC)),</span>
+<span class="nc" id="L78">      startAt.map(new DateTime(_).withZone(DateTimeZone.UTC)).getOrElse(new DateTime(2000, 1, 1, 0, 0)),</span>
+<span class="nc" id="L79">      endAt.map(new DateTime(_).withZone(DateTimeZone.UTC)).getOrElse(new DateTime(2100, 1, 1, 0, 0)),</span>
+<span class="nc" id="L80">      triggerPages.getOrElse(List[String]()),</span>
+<span class="nc" id="L81">      triggerDelay.getOrElse(0),</span>
+<span class="nc" id="L82">      triggerCd.getOrElse(0))</span>
+  }
+
+  def isCompleted: Boolean = {
+<span class="nc bnc" id="L86" title="All 6 branches missed.">    `type`.isDefined &amp;&amp; action.isDefined &amp;&amp; limit.isDefined</span>
+  }
+
+  def lackField: List[String] = {
+<span class="nc" id="L90">    var lackFields = new scala.collection.mutable.ListBuffer[String]</span>
+<span class="nc bnc" id="L91" title="All 2 branches missed.">    if (`type`.isEmpty)</span>
+<span class="nc" id="L92">      lackFields += &quot;推送类型&quot;</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">    if (action.isEmpty)</span>
+<span class="nc" id="L94">      lackFields += &quot;触发条件&quot;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">    if (limit.isEmpty)</span>
+<span class="nc" id="L96">      lackFields += &quot;触发次数&quot;</span>
+<span class="nc" id="L97">    lackFields.toList</span>
+  }
+}
+
+<span class="nc" id="L101">object PushRuleForm {</span>
+<span class="nc" id="L102">  implicit val reads = new Reads[Either[List[String], List[ProductForm]]] {</span>
+    override def reads(json: JsValue): JsResult[Either[List[String], List[ProductForm]]] = {
+<span class="nc" id="L104">      val r = json.as[JsArray].value</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">      if (r.headOption.exists(_.isInstanceOf[JsString])) {</span>
+<span class="nc" id="L106">        JsSuccess(Left[List[String], List[ProductForm]](json.as[JsArray].as[Array[String]].toList))</span>
+      } else {
+<span class="nc" id="L108">        JsSuccess(Right[List[String], List[ProductForm]](json.as[JsArray].as[Array[ProductForm]].toList))</span>
+      }
+    }
+  }
+
+<span class="nc" id="L113">  implicit val readsRule: Reads[PushRuleForm] = (</span>
+<span class="nc" id="L114">    (JsPath \ &quot;type&quot;).readNullable[PushRuleType] and</span>
+<span class="nc" id="L115">    (JsPath \ &quot;action&quot;).readNullable[String] and</span>
+<span class="nc" id="L116">    (JsPath \ &quot;triggerFilter&quot;).readNullable[TriggerFilter] and</span>
+<span class="nc" id="L117">    (JsPath \ &quot;targets&quot;).readNullable[List[PushRuleTarget]] and</span>
+<span class="nc" id="L118">    (JsPath \ &quot;limit&quot;).readNullable[Int](min(0)) and</span>
+<span class="nc" id="L119">    (JsPath \ &quot;scheduleAt&quot;).readNullable[Int] and</span>
+<span class="nc" id="L120">    (JsPath \ &quot;activateAt&quot;).readNullable[Long] and</span>
+<span class="nc" id="L121">    (JsPath \ &quot;startAt&quot;).readNullable[Long] and</span>
+<span class="nc" id="L122">    (JsPath \ &quot;endAt&quot;).readNullable[Long] and</span>
+<span class="nc" id="L123">    (JsPath \ &quot;triggerDelay&quot;).readNullable[Int] and</span>
+<span class="nc" id="L124">    (JsPath \ &quot;triggerCd&quot;).readNullable[Int] and</span>
+<span class="nc" id="L125">    (JsPath \ &quot;productIds&quot;).readNullable[List[String]] and</span>
+<span class="nc" id="L126">    (JsPath \ &quot;triggerPages&quot;).readNullable[List[String]])(PushRuleForm.apply _)</span>
+<span class="nc" id="L127">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

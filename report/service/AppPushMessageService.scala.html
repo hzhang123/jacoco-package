@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppPushMessageService.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">service</a> &gt; <span class="el_source">AppPushMessageService.scala</span></div><h1>AppPushMessageService.scala</h1><pre class="source lang-java linenums">package service
+
+import com.typesafe.scalalogging.LazyLogging
+import dtos.{ JobContext, PushTaskDto, SegmentDto, UserInfo }
+import handlers.VisitorIdDeviceIdMapper
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.Product
+import javax.inject.{ Inject, Singleton }
+import model.Statics
+import play.api.libs.json.Json
+import utils.TrackingUtil
+
+/**
+ * @author : xhldtc
+ * @since : 2019/12/3
+ */
+@Singleton
+<span class="pc bnc" id="L18" title="All 4 branches missed.">class AppPushMessageService @Inject() (visitorIdDeviceIdMapper: VisitorIdDeviceIdMapper) extends LazyLogging {</span>
+
+  def buildJobContexts(userInfos: Seq[UserInfo], pushMessage: PushMessage, pushJob: PushJob, products: Seq[Product],
+    pushRules: Seq[PushRule], pushChannels: Seq[PushChannel]): Seq[JobContext] = {
+<span class="nc" id="L22">    val groupedUsers = partitionByChannel(userInfos, products, pushMessage)</span>
+<span class="nc" id="L23">    groupedUsers.flatMap { groupedUser =&gt;</span>
+<span class="nc" id="L24">      val head = groupedUser.head</span>
+<span class="nc bnc" id="L25" title="All 14 branches missed.">      if (!groupedUser.forall(u =&gt; u.channel == head.channel &amp;&amp; u.domain == head.domain)) {</span>
+<span class="nc bnc" id="L26" title="All 2 branches missed.">        logger.warn(s&quot;not all grouped users with same channel ${head.channel} and domain ${head.domain} for message ${pushMessage.id}&quot;)</span>
+      }
+<span class="nc bnc" id="L28" title="All 2 branches missed.">      findMatchProductAndRule(head, products, pushRules) match {</span>
+<span class="nc bnc" id="L29" title="All 4 branches missed.">        case (Some(product), Some(pushRule)) =&gt; {</span>
+<span class="nc" id="L30">          val pushTaskDtoList = buildTasks(groupedUser, pushChannels, product, pushRule, pushMessage, pushJob.dbid)</span>
+          //这里的分群total并不是真正这个分群的设备数量，而是设置了当前所有task下的token数量
+<span class="nc" id="L32">          val taskTotalAudience = pushTaskDtoList.map(_.task.audience.size).sum</span>
+<span class="nc" id="L33">          val segmentDto = SegmentDto.fromJob(pushJob, taskTotalAudience)</span>
+<span class="nc bnc" id="L34" title="All 2 branches missed.">          logger.info(s&quot;batch task total audience num is $taskTotalAudience for message ${pushMessage.dbid} and productId ${product.dbid}&quot;)</span>
+          /*
+          TODO: 这里的发送不是真正意义上的服务器送达 之后加上 u 和 regId 的 mapping 可以改进
+           觉得真正意义的服务器送达应该是channel调用厂商通道返回success之后才上报埋点
+           */
+<span class="nc" id="L39">          groupedUser.foreach { u =&gt; TrackingUtil.trackPushMessageSent(pushMessage.ai, u.visitorId, pushMessage.name) }</span>
+<span class="nc" id="L40">          visitorIdDeviceIdMapper.insert(groupedUser.map(u =&gt; u.token -&gt; u.visitorId).toMap)</span>
+<span class="nc" id="L41">          Some(JobContext(pushJob, pushMessage, segmentDto, pushRule, pushTaskDtoList))</span>
+        }
+        case _ =&gt;
+<span class="nc bnc" id="L44" title="All 2 branches missed.">          logger.warn(s&quot;product or rule not found for user: ${Json.toJson(head)}, message ${pushMessage.id}&quot;)</span>
+<span class="nc" id="L45">          None</span>
+      }
+    }
+  }
+
+  /*
+  将qs查到的所有用户进行分组，先按channel切分，然后每个channel下用domain进行切割，所以返回的每个list里domain和channel都是一样的
+  再根据products信息把这次推送用到的domain user过滤出来
+   */
+  def partitionByChannel(validUsers: Seq[UserInfo], products: Seq[Product], pushMessage: PushMessage): Seq[Seq[UserInfo]] = {
+<span class="nc" id="L55">    val validDomain = products.map(_.spn)</span>
+<span class="nc" id="L56">    val pushTargets = validUsers.groupBy(_.channel).values.flatMap {</span>
+<span class="nc" id="L57">      sameChannelUsers =&gt; sameChannelUsers.groupBy(_.domain).values.toSeq</span>
+<span class="nc" id="L58">    }.toSeq.filter(sameChannelAndDomainUsers =&gt; validDomain.contains(sameChannelAndDomainUsers.head.domain))</span>
+
+<span class="nc" id="L60">    pushTargets.filter(_.nonEmpty).foreach { targets =&gt;</span>
+<span class="nc" id="L61">      val t = targets.head</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">      logger.info(s&quot;prepare push targets, count: ${targets.length} domain: ${t.domain} channel: ${t.channel} message: ${pushMessage.id}&quot;)</span>
+    }
+<span class="nc bnc" id="L64" title="All 2 branches missed.">    if (pushTargets.isEmpty) {</span>
+<span class="nc" id="L65">      val distinctDomain = validUsers.map(_.domain).distinct.mkString(&quot;;&quot;).take(1000)</span>
+<span class="nc" id="L66">      val productSpn = validDomain.mkString(&quot;;&quot;)</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">      logger.warn(s&quot;get empty targets, total users: ${validUsers.length}, distinct.spn: $distinctDomain, product.spn: $productSpn, message: ${pushMessage.id}&quot;)</span>
+    }
+<span class="nc" id="L69">    pushTargets</span>
+  }
+
+  /*
+  以下逻辑基于android和ios可以同包名，但是相同平台有多个应用情况下，比如android有多个products，包名是不能相同，否则逻辑有问题，找到的rule可能不准
+   */
+  def findMatchProductAndRule(userInfo: UserInfo, products: Seq[Product], rules: Seq[PushRule]): (Option[Product], Option[PushRule]) = {
+<span class="nc" id="L76">    val maybeProduct = userInfo.channel match {</span>
+<span class="nc bnc" id="L77" title="All 18 branches missed.">      case Statics.ChannelName.iOS =&gt; products.filter(_.platform == Statics.Platform.ios).find(_.spn == userInfo.domain)</span>
+<span class="nc bnc" id="L78" title="All 12 branches missed.">      case _ =&gt; products.filter(_.platform == Statics.Platform.android).find(_.spn == userInfo.domain)</span>
+    }
+<span class="nc bnc" id="L80" title="All 6 branches missed.">    val maybeRule = maybeProduct.flatMap(product =&gt; rules.find(_.productId == product.id))</span>
+<span class="nc" id="L81">    (maybeProduct, maybeRule)</span>
+  }
+
+  def buildTasks(userInfos: Seq[UserInfo], pushChannels: Seq[PushChannel], product: Product,
+    pushRule: PushRule, message: PushMessage, jobId: Int): Seq[PushTaskDto] = {
+<span class="nc" id="L86">    val userInfo = userInfos.head</span>
+<span class="nc" id="L87">    val maybePushChannel = findValidChannel(userInfos.head, pushChannels, product, pushRule)</span>
+<span class="nc" id="L88">    maybePushChannel match {</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">      case None =&gt;</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        logger.warn(s&quot;found no channel for domain: ${userInfo.domain}, channel: ${userInfo.channel}, message: ${message.id}&quot;)</span>
+<span class="nc" id="L91">        Seq()</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">      case Some(pushChannel) =&gt;</span>
+<span class="nc" id="L93">        val taskTokenLimit = Statics.PushChannelLimit.getOrElse(pushChannel.channelName, 1000)</span>
+<span class="nc" id="L94">        userInfos.grouped(taskTokenLimit).map { groupUsers =&gt;</span>
+<span class="nc" id="L95">          val pushTask = PushTask.buildPreviewTask(message, pushChannel, groupUsers.map(_.token).toList).copy(jobId = Some(jobId))</span>
+<span class="nc" id="L96">          PushTaskDto(pushTask, pushChannel)</span>
+        }.toSeq
+    }
+  }
+
+  // 根据数据端返回的渠道名称，包名进行渠道过滤
+  def findValidChannel(userInfo: UserInfo, channels: Seq[PushChannel], product: Product, pushRule: PushRule): Option[PushChannel] = {
+<span class="nc" id="L103">    val maybeTargetName = pushRule.actionParameters.get(Statics.iOSPushChannelName)</span>
+<span class="nc" id="L104">    maybeTargetName match {</span>
+<span class="nc bnc" id="L105" title="All 8 branches missed.">      case Some(targetName) if userInfo.channel == Statics.ChannelName.iOS =&gt;</span>
+<span class="nc bnc" id="L106" title="All 18 branches missed.">        channels.find(c =&gt; c.channelName == userInfo.channel &amp;&amp; c.packageName == userInfo.domain &amp;&amp; c.name == targetName)</span>
+      case _ =&gt;
+<span class="nc bnc" id="L108" title="All 12 branches missed.">        channels.find(c =&gt; c.channelName == userInfo.channel &amp;&amp; c.packageName == userInfo.domain)</span>
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

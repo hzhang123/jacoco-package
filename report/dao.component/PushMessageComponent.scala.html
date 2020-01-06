@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushMessageComponent.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao.component</a> &gt; <span class="el_source">PushMessageComponent.scala</span></div><h1>PushMessageComponent.scala</h1><pre class="source lang-java linenums">package dao.component
+
+import io.growing.marketing.common.model.AudienceType.AudienceType
+import io.growing.marketing.common.model.MessagePlatform.MessagePlatform
+import io.growing.marketing.common.model._
+import io.growing.marketing.common.model.MessageType.MessageType
+import io.growing.marketing.common.model.MsgVersion.MsgVersion
+import io.growing.micros.business.model.Status
+import org.joda.time.DateTime
+import slick.lifted.{ Rep, Tag }
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import io.growing.micros.business.model.Status.Status
+import play.api.db.slick.HasDatabaseConfigProvider
+import MessageType.convertColumnType
+import MessagePlatform.convertColumnType
+import PushContent.convertColumnType
+import PushFilter.convertColumnType
+import MsgVersion.convertColumnType
+import AudienceType.convertColumnType
+
+/**
+ * PushMessageComponent
+ *
+ * @author damon lin
+ *         2018/12/12
+ */
+<span class="fc" id="L28">trait PushMessageComponent { self: HasDatabaseConfigProvider[GrowingPostgresDriver] ⇒</span>
+
+  val messageTableName: String
+
+<span class="pc bpc" id="L32" title="1 of 2 branches missed.">  class PushMessageTable(tag: Tag) extends Table[PushMessage](tag, messageTableName) {</span>
+
+<span class="fc" id="L34">    def id: Rep[Int] = column[Int](&quot;id&quot;, O.PrimaryKey, O.AutoInc)</span>
+
+<span class="fc" id="L36">    def platform: Rep[MessagePlatform] = column[MessagePlatform](&quot;platform&quot;)</span>
+
+<span class="fc" id="L38">    def name: Rep[String] = column[String](&quot;name&quot;)</span>
+
+<span class="fc" id="L40">    def projectId: Rep[Int] = column[Int](&quot;project_id&quot;)</span>
+
+<span class="fc" id="L42">    def ai: Rep[String] = column[String](&quot;ai&quot;)</span>
+
+<span class="fc" id="L44">    def state: Rep[Status] = column[Status](&quot;state&quot;, O.Default(Status.activated))</span>
+
+<span class="fc" id="L46">    def typ: Rep[MessageType] = column[MessageType](&quot;type&quot;)</span>
+
+<span class="fc" id="L48">    def priority: Rep[Int] = column[Int](&quot;priority&quot;)</span>
+
+<span class="fc" id="L50">    def content: Rep[Option[String]] = column[Option[String]](&quot;content_url&quot;)</span>
+
+<span class="fc" id="L52">    def contentMetadata: Rep[Option[PushContent]] = column[Option[PushContent]](&quot;content_metadata&quot;)</span>
+
+<span class="fc" id="L54">    def campaign: Rep[Int] = column[Int](&quot;campaign&quot;)</span>
+
+<span class="fc" id="L56">    def channel: Rep[Int] = column[Int](&quot;channel&quot;)</span>
+
+<span class="fc" id="L58">    def audienceType: Rep[Option[AudienceType]] = column[Option[AudienceType]](&quot;audience_type&quot;)</span>
+
+<span class="fc" id="L60">    def audienceId: Rep[Option[String]] = column[Option[String]](&quot;audience_id&quot;)</span>
+
+<span class="fc" id="L62">    def metricsRef: Rep[Int] = column[Int](&quot;metrics_ref&quot;)</span>
+
+<span class="fc" id="L64">    def creatorId: Rep[Int] = column[Int](&quot;creator_id&quot;)</span>
+
+<span class="fc" id="L66">    def updaterId: Rep[Int] = column[Int](&quot;updater_id&quot;)</span>
+
+<span class="fc" id="L68">    def audienceFilter: Rep[PushFilter] = column[PushFilter](&quot;audience_filter&quot;)</span>
+
+<span class="fc" id="L70">    def version: Rep[MsgVersion] = column[MsgVersion](&quot;version&quot;)</span>
+
+<span class="fc" id="L72">    def createdAt: Rep[DateTime] = column[DateTime](&quot;created_at&quot;)</span>
+
+<span class="fc" id="L74">    def updatedAt: Rep[DateTime] = column[DateTime](&quot;updated_at&quot;)</span>
+
+<span class="fc" id="L76">    override def * = (id.?, platform, name, projectId, ai, state, typ, priority, content, contentMetadata, campaign, channel, metricsRef,</span>
+<span class="pc" id="L77">      audienceType, audienceId, creatorId, updaterId, audienceFilter, version, createdAt, updatedAt) &lt;&gt; ((PushMessage.apply _).tupled, PushMessage.unapply)</span>
+  }
+
+<span class="fc" id="L80">  val PushMessages = TableQuery[PushMessageTable]</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

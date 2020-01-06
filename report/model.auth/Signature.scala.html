@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Signature.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">model.auth</a> &gt; <span class="el_source">Signature.scala</span></div><h1>Signature.scala</h1><pre class="source lang-java linenums">package model.auth
+
+import java.util.concurrent.TimeUnit
+
+import javax.inject.{ Inject, Singleton }
+import com.google.common.cache.{ CacheBuilder, CacheLoader }
+import io.growing.micros.business.dao.ProjectDao
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.util.Random
+
+/**
+ * Created by yedingding on 15/10/28.
+ */
+
+<span class="nc bnc" id="L17" title="All 20 branches missed.">case class AuthenticateError(reason: String) extends Exception</span>
+
+@Singleton
+<span class="nc" id="L20">class Signature @Inject() (projectDao: ProjectDao) {</span>
+
+<span class="nc bnc" id="L22" title="All 4 branches missed.">  private lazy val tokenMap = CacheBuilder.newBuilder()</span>
+<span class="nc" id="L23">    .maximumSize(1000)</span>
+<span class="nc" id="L24">    .expireAfterAccess(1, TimeUnit.HOURS)</span>
+<span class="nc bnc" id="L25" title="All 2 branches missed.">    .build(new CacheLoader[String, Token] {</span>
+      override def load(service: String): Token = {
+<span class="nc" id="L27">        val optProject = Await.result(projectDao.findByKey(service), 1 seconds)</span>
+<span class="nc" id="L28">        optProject.map { project =&gt;</span>
+<span class="nc" id="L29">          Token(project.clientId.getOrElse(&quot;&quot;), project.clientSecret.getOrElse(&quot;&quot;))</span>
+<span class="nc" id="L30">        } getOrElse (Token.empty)</span>
+      }
+    })
+
+  def authenticate(key: String, service: String, method: String, path: String, params: Map[String, String]): Either[AuthenticateError, String] = {
+<span class="nc" id="L35">    val token = authenticationToken(service)</span>
+<span class="nc bnc" id="L36" title="All 2 branches missed.">    if (!token.key.equals(key)) {</span>
+<span class="nc" id="L37">      return Left(new AuthenticateError(s&quot;Invalid key: you should have sent your_client_id, but you sent $key&quot;))</span>
+    }
+
+<span class="nc" id="L40">    val req = SignedRequest(method, path, params)</span>
+<span class="nc" id="L41">    req.sign(token)</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">    if (req.validate(token)) {</span>
+<span class="nc" id="L43">      Right(Random.alphanumeric.take(64).mkString(&quot;&quot;))</span>
+    } else {
+<span class="nc" id="L45">      Left(new AuthenticateError(s&quot;Invalid signature: you should have sent HmacSHA256Hex(${req.stringToSign}, your_client_secret)&quot; +</span>
+<span class="nc" id="L46">        s&quot;, but you sent ${params.get(&quot;auth&quot;).getOrElse(&quot;&quot;)}&quot;))</span>
+    }
+  }
+
+  def authenticationToken(service: String): Token = {
+<span class="nc" id="L51">    tokenMap.get(service)</span>
+  }
+<span class="nc" id="L53">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

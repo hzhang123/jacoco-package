@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbTestController.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers</a> &gt; <span class="el_source">AbTestController.scala</span></div><h1>AbTestController.scala</h1><pre class="source lang-java linenums">package controllers
+
+import com.typesafe.scalalogging.LazyLogging
+import form.AbTestForm
+import io.growing.micros.business.auth._
+import io.growing.micros.business.controller.{ AbstractController, ProjectActionComponent }
+import io.growing.micros.play.mvc.{ FutureUtils, TimeoutAction }
+import io.growing.micros.utils.conversion.GrowingConversions._
+import javax.inject.{ Inject, Singleton }
+import play.api.libs.json.{ JsValue, Json }
+import play.api.mvc.Results.{ BadRequest, Ok }
+import play.api.mvc.{ Action, ActionBuilder, BodyParser, PlayBodyParsers }
+import service.{ AbTestService, TokenService }
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+@Singleton
+<span class="nc bnc" id="L18" title="All 24 branches missed.">class AbTestController @Inject() (</span>
+  ac: TimeoutAction,
+<span class="nc" id="L20">  errorFormatterAction: ErrorFormatterAction,</span>
+<span class="nc" id="L21">  abTestService: AbTestService,</span>
+<span class="nc" id="L22">  parse: PlayBodyParsers,</span>
+  tokenService: TokenService)
+<span class="nc" id="L24">  extends AbstractController with ProjectActionComponent with PermissionCheckComponent</span>
+  with ACLControlComponent with LazyLogging with FutureUtils {
+
+<span class="nc" id="L27">  val readPermission: String = AuthConstants.Marketing.Read</span>
+<span class="nc" id="L28">  val managePermission: String = AuthConstants.Marketing.Manage</span>
+
+  def Actions[B](auth: String, projectUid: String, parse: BodyParser[B]): ActionBuilder[AuthRequest, B] = {
+<span class="nc" id="L31">    WithTimeoutAction(parse) andThen errorFormatterAction andThen new AuthAction(parse) andThen</span>
+<span class="nc" id="L32">      ProjectAction(projectUid.toId) andThen PermissionCheckAction(auth)</span>
+  }
+
+<span class="nc" id="L35">  def createAbTest(projectUid: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async { implicit request =&gt;</span>
+<span class="nc" id="L36">    request.body.validate[AbTestForm].fold(</span>
+<span class="nc" id="L37">      errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L38">      form =&gt;</span>
+<span class="nc" id="L39">        abTestService.create(form, request.project, request.userId).map(dto =&gt; Ok(Json.toJson(dto))))</span>
+  }
+
+<span class="nc" id="L42">  def updateAbTest(projectUid: String, abTestId: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async { implicit request =&gt;</span>
+<span class="nc" id="L43">    request.body.validate[AbTestForm].fold(</span>
+<span class="nc" id="L44">      errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L45">      form =&gt;</span>
+<span class="nc" id="L46">        abTestService.update(form, request.project, abTestId.toId, request.userId).map(dto =&gt; Ok(Json.toJson(dto))))</span>
+  }
+
+  /**
+   * 查找一条AB测试最新的一对弹窗,用于编辑页,详情页.
+   * @param projectUid 项目id
+   * @param abTestId AB测试id
+   * @return
+   */
+<span class="nc" id="L55">  def findLatestAbTest(projectUid: String, abTestId: String): Action[Unit] = Actions(readPermission, projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L56">    abTestService.findLatestMessages(projectUid.toId, abTestId.toId).map {</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">      case Left(value) =&gt; BadRequest(jsonErrMsgGen(Seq(value)))</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">      case Right(value) =&gt; Ok(Json.toJson(value))</span>
+    }
+  }
+
+  /**
+   * 查找项目下所有AB测试最新一对弹窗,用于列表页.
+   * @param projectUid 项目id
+   * @return
+   */
+<span class="nc" id="L67">  def findAllLatestAbTest(projectUid: String): Action[Unit] = Actions(readPermission, projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L68">    abTestService.findAllLatestMessages(request.projectId).map(dto =&gt; Ok(Json.toJson(dto)))</span>
+  }
+
+  /**
+   * 查找一条AB测试所有历史版本弹窗,用于前端查数据.
+   * @param projectUid 项目id
+   * @param abTestId AB测试id
+   * @return
+   */
+<span class="nc" id="L77">  def findHistoryAbTest(projectUid: String, abTestId: String): Action[Unit] = Actions(readPermission, projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L78">    abTestService.findHistoryMessages(projectUid.toId, abTestId.toId).map {</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">      case Left(value) =&gt; BadRequest(jsonErrMsgGen(Seq(value)))</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">      case Right(value) =&gt; Ok(Json.toJson(value))</span>
+    }
+  }
+
+<span class="nc" id="L84">  def deleteAbTest(projectUid: String, abTestId: String): Action[Unit] = Actions(readPermission, projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L85">    abTestService.archive(projectUid.toId, abTestId.toId).map {</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">      case None =&gt; BadRequest(jsonErrMsgGen(Seq(&quot;删除失败&quot;)))</span>
+<span class="nc" id="L87">      case _ =&gt; Ok(Json.obj(&quot;message&quot; -&gt; &quot;删除成功&quot;))</span>
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

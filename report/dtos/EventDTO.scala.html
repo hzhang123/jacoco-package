@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EventDTO.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dtos</a> &gt; <span class="el_source">EventDTO.scala</span></div><h1>EventDTO.scala</h1><pre class="source lang-java linenums">package dtos
+
+import io.growing.micros.utils.hash.HashIdGenerator
+import play.api.libs.json.{ JsPath, Json, OWrites, Reads }
+
+/**
+ * 事件rpc传输对象
+ *
+ * @param id     数据库自增 id
+ * @param key    打点英文名称
+ * @param name   打点中文名称
+ * @param `type` 类型
+ */
+<span class="nc bnc" id="L14" title="All 74 branches missed.">final case class EventDTO(</span>
+<span class="nc" id="L15">  id: String,</span>
+<span class="nc" id="L16">  key: String,</span>
+<span class="nc" id="L17">  name: String,</span>
+<span class="nc" id="L18">  `type`: String,</span>
+<span class="nc" id="L19">  eventType: String,</span>
+<span class="nc" id="L20">  scope: String,</span>
+<span class="nc" id="L21">  projectId: String,</span>
+<span class="nc" id="L22">  monitorStatus: String,</span>
+<span class="nc" id="L23">  dimensions: Option[Seq[EventLevelVarDTO]]) {</span>
+<span class="nc" id="L24">  val dbid: Int = HashIdGenerator.decodeId(id)</span>
+}
+
+<span class="nc" id="L27">object EventDTO {</span>
+
+  import play.api.libs.functional.syntax._
+
+<span class="nc" id="L31">  implicit val eventReads: Reads[EventDTO] = (</span>
+<span class="nc" id="L32">    (JsPath \ &quot;id&quot;).read[String] and</span>
+<span class="nc" id="L33">    (JsPath \ &quot;key&quot;).read[String] and</span>
+<span class="nc" id="L34">    (JsPath \ &quot;name&quot;).read[String] and</span>
+<span class="nc" id="L35">    (JsPath \ &quot;type&quot;).read[String] and</span>
+<span class="nc" id="L36">    (JsPath \ &quot;eventType&quot;).read[String] and</span>
+<span class="nc" id="L37">    (JsPath \ &quot;scope&quot;).read[String] and</span>
+<span class="nc" id="L38">    (JsPath \ &quot;projectId&quot;).read[String] and</span>
+<span class="nc" id="L39">    (JsPath \ &quot;monitorStatus&quot;).read[String] and</span>
+<span class="nc" id="L40">    (JsPath \ &quot;attrs&quot;).readNullable[Seq[EventLevelVarDTO]])(EventDTO.apply _)</span>
+
+<span class="nc" id="L42">  implicit val eventWrites: OWrites[EventDTO] = Json.writes[EventDTO]</span>
+
+  def mock: EventDTO = {
+<span class="nc" id="L45">    EventDTO(</span>
+<span class="nc" id="L46">      &quot;id&quot;,</span>
+<span class="nc" id="L47">      &quot;key&quot;,</span>
+<span class="nc" id="L48">      &quot;name&quot;,</span>
+<span class="nc" id="L49">      &quot;type&quot;,</span>
+<span class="nc" id="L50">      &quot;eventType&quot;,</span>
+<span class="nc" id="L51">      &quot;scope&quot;,</span>
+<span class="nc" id="L52">      &quot;projectId&quot;,</span>
+<span class="nc" id="L53">      &quot;monitorStatus&quot;,</span>
+<span class="nc" id="L54">      None)</span>
+  }
+}
+<span class="nc" id="L57"></span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

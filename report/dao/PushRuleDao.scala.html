@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushRuleDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">PushRuleDao.scala</span></div><h1>PushRuleDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import dao.component.PushRuleComponent
+import io.growing.marketing.common.model.PushRule
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import io.growing.micros.utils.time.DateTimeUtil.{ UTCNow, now }
+import javax.inject.{ Inject, Singleton }
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.dbio.Effect
+import slick.sql.FixedSqlAction
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * PushRuleDao
+ *
+ * @author damon lin
+ *         2018/12/13
+ */
+@Singleton
+<span class="pc bnc" id="L24" title="All 8 branches missed.">class PushRuleDao @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="fc" id="L25">  extends PushRuleComponent with HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="fc" id="L27">  override val ruleTableName = &quot;push_rules&quot;</span>
+
+<span class="pc bpc" id="L29" title="1 of 4 branches missed.">  lazy val insertQuery = PushRules returning PushRules.map(_.id) into ((Rule, id) =&gt; Rule.copy(id = Option(id)))</span>
+
+  def findByMessageId(messageId: Int): Future[List[PushRule]] = {
+<span class="nc" id="L32">    db.run(PushRules.filter(r =&gt; r.messageId === messageId).result).map(_.toList)</span>
+  }
+
+  def findByMessageIds(messageIds: Seq[Int]): Future[List[PushRule]] = {
+<span class="fc" id="L36">    db.run(PushRules.filter(r =&gt; r.messageId.inSet(messageIds)).result).map(_.toList)</span>
+  }
+
+  def insert(pushRules: Seq[PushRule]): Future[Seq[PushRule]] = {
+<span class="fc" id="L40">    db.run(insertQuery ++= pushRules)</span>
+  }
+
+  def update(pushRules: Seq[PushRule], upRule: PushRule): Future[Int] = {
+<span class="nc" id="L44">    val ids = pushRules.map(_.dbid)</span>
+<span class="nc" id="L45">    db.run(PushRules.filter(_.id inSet ids)</span>
+<span class="nc" id="L46">      .map(r =&gt; (r.typ, r.action, r.limit, r.startAt, r.endAt, r.updaterId, r.updatedAt, r.activateAt))</span>
+<span class="nc" id="L47">      .update((upRule.`type`, upRule.action, upRule.limit, upRule.startAt, upRule.endAt, upRule.updaterId, UTCNow, upRule.activateAt)))</span>
+  }
+
+  def updateAction(oldRule: PushRule, updateRule: PushRule): FixedSqlAction[Int, NoStream, Effect.Write] = {
+<span class="nc" id="L51">    PushRules.filter(_.id === oldRule.dbid)</span>
+<span class="nc" id="L52">      .map(r =&gt; (r.typ, r.action, r.limit, r.startAt, r.endAt, r.updaterId, r.updatedAt, r.activateAt,</span>
+<span class="nc" id="L53">        r.triggerPages, r.triggerDelay, r.triggerCd, r.scheduleAt, r.actionType, r.actionTarget, r.actionParameters, r.state, r.triggerFilter))</span>
+<span class="nc" id="L54">      .update((updateRule.`type`, updateRule.action, updateRule.limit, updateRule.startAt, updateRule.endAt, updateRule.updaterId,</span>
+<span class="nc" id="L55">        UTCNow, updateRule.activateAt, updateRule.triggerPages, updateRule.triggerDelay, updateRule.triggerCd,</span>
+<span class="nc" id="L56">        updateRule.scheduleAt, updateRule.actionType, updateRule.actionTarget, updateRule.actionParameters, updateRule.state, updateRule.triggerFilter))</span>
+  }
+
+  def stopRules(ids: Seq[Int]): Future[Int] = {
+<span class="fc" id="L60">    db.run(PushRules.filter(_.id inSet ids).map(p =&gt; (p.state, p.endAt)).update((Status.stop, UTCNow)))</span>
+  }
+
+  def updateWxQrCode(messageId: Int, productId: Int, wxQrCode: String, userId: Int): Future[Int] = {
+<span class="nc" id="L64">    db.run(PushRules.filter(r =&gt; r.messageId === messageId &amp;&amp; r.productId === productId).map(r =&gt; (r.wxQrCode, r.updaterId, r.updatedAt)).update((Some(wxQrCode), userId, UTCNow)))</span>
+  }
+
+  def deleteByMessageId(messageId: Int): Future[Int] = {
+<span class="nc" id="L68">    db.run(PushRules.filter(_.messageId === messageId).map(_.state).update(Status.archived))</span>
+  }
+
+  def deleteByMessageIds(messageIds: Seq[Int]): Future[Int] = {
+<span class="nc" id="L72">    db.run(PushRules.filter(_.messageId.inSet(messageIds)).delete)</span>
+  }
+
+  def delete(rules: Seq[PushRule]): Future[Int] = {
+<span class="nc" id="L76">    val ids = rules.map(_.dbid)</span>
+<span class="nc" id="L77">    db.run(PushRules.filter(_.id inSet ids).delete)</span>
+  }
+
+  def findExpiredMessageIds(): Future[Seq[Int]] = {
+<span class="fc" id="L81">    db.run(PushRules.filter(r =&gt; r.endAt &lt; UTCNow &amp;&amp; r.state === Status.activated &amp;&amp; r.scheduleAt.isEmpty).map(_.messageId).result)</span>
+  }
+
+  // 筛选出一次性推送任务(scheduleAt字段为空)
+  def findPlanningMessageIds(): Future[Seq[Int]] = {
+<span class="fc" id="L86">    db.run(PushRules.filter(r =&gt; r.startAt &lt; r.endAt &amp;&amp; r.startAt &lt;= UTCNow &amp;&amp; r.endAt &gt;= UTCNow &amp;&amp;</span>
+<span class="fc" id="L87">      r.state.inSet(Seq(Status.activated, Status.planning)) &amp;&amp; r.scheduleAt.isEmpty).map(_.messageId).result)</span>
+  }
+
+  //找出循环推送任务的messageId
+  def findDailyRuleMessageIds(): Future[Seq[Int]] = {
+<span class="fc" id="L92">    val secondOfDay = now.secondOfDay.get</span>
+<span class="fc" id="L93">    db.run(PushRules.filter(r =&gt; r.startAt &lt;= UTCNow &amp;&amp; r.endAt &gt;= UTCNow &amp;&amp; r.scheduleAt &lt;= secondOfDay &amp;&amp;</span>
+<span class="fc" id="L94">      r.state === Status.activated).map(_.messageId).distinct.result)</span>
+  }
+
+  //找出还在有效时间内的的循环推送消息messageId
+  def findActiveDailyRuleMessageIds(): Future[Seq[Int]] = {
+<span class="fc" id="L99">    db.run(PushRules.filter(r =&gt; r.startAt &lt;= UTCNow &amp;&amp; r.endAt &gt;= UTCNow &amp;&amp; r.scheduleAt.nonEmpty &amp;&amp;</span>
+<span class="fc" id="L100">      r.state === Status.activated).map(_.messageId).distinct.result)</span>
+  }
+
+  def updateActivatedAt(ids: Seq[Int]): Future[Int] = {
+<span class="fc" id="L104">    db.run(PushRules.filter(r =&gt; r.messageId.inSet(ids) &amp;&amp; r.activateAt.isEmpty).map(_.activateAt).update(Some(UTCNow)))</span>
+  }
+
+  def updatePlanningToActivated(ids: Seq[Int]): Future[Int] = {
+<span class="fc" id="L108">    db.run(PushRules.filter(r =&gt; r.messageId.inSet(ids) &amp;&amp; r.state === Status.planning).map(_.state).update(Status.activated))</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

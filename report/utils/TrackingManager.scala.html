@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TrackingManager.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">utils</a> &gt; <span class="el_source">TrackingManager.scala</span></div><h1>TrackingManager.scala</h1><pre class="source lang-java linenums">package utils
+
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ ProductDao, SegmentationDao }
+import infrastructure.measurement.metrics.MetricRpcClient
+import io.growing.marketing.common.model.{ PushMessage, PushRule }
+import javax.inject.Inject
+
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+
+/**
+ * TrackingManager
+ *
+ * @author damon lin
+ *         2019/7/30
+ */
+<span class="nc bnc" id="L18" title="All 4 branches missed.">class TrackingManager @Inject() (</span>
+<span class="nc" id="L19">  segmentationDao: SegmentationDao,</span>
+<span class="nc" id="L20">  productDao: ProductDao,</span>
+<span class="nc" id="L21">  rpcServiceClient: MetricRpcClient) extends LazyLogging {</span>
+
+  def trackingPopupActive(message: PushMessage, maybeRule: Option[PushRule], from: String): Future[_] = {
+<span class="nc" id="L24">    Future.traverse(maybeRule.toSeq) {</span>
+<span class="nc" id="L25">      rule =&gt;</span>
+        val futureMaybeSegName = {
+<span class="nc bnc" id="L27" title="All 2 branches missed.">          if (message.audienceId.isEmpty) {</span>
+<span class="nc" id="L28">            Future.successful(message.audienceType.map(_.toString))</span>
+          } else {
+<span class="nc" id="L30">            segmentationDao.findById(message.projectId, message.segmentId.get).map(_.map(_.name))</span>
+          }
+        }
+
+        val futureMaybeProductName = {
+<span class="nc bnc" id="L35" title="All 2 branches missed.">          if (rule.productId.isEmpty) {</span>
+<span class="nc" id="L36">            Future.successful(Some(&quot;noProduct&quot;))</span>
+          } else {
+<span class="nc" id="L38">            productDao.findById(rule.productId.get).map(_.map(p =&gt; p.platform + &quot;_&quot; + p.name))</span>
+          }
+        }
+
+        val futureMaybeEventName = {
+<span class="nc bnc" id="L43" title="All 8 branches missed.">          if (rule.actionType.isDefined &amp;&amp; rule.actionType.get == &quot;system&quot;) {</span>
+<span class="nc" id="L44">            Future.successful(rule.action)</span>
+          } else {
+            try {
+<span class="nc" id="L47">              rpcServiceClient.queryCustomEvents(rule.action.toSeq, message.projectId).map(_.headOption.map(_.getName))</span>
+            } catch {
+              case t: Throwable =&gt;
+                // ignore
+<span class="nc bnc" id="L51" title="All 2 branches missed.">                logger.error(&quot;rpcServiceClient catch exception: &quot; + t.getMessage)</span>
+<span class="nc" id="L52">                Future.successful(Some(&quot;no event&quot;))</span>
+            }
+          }
+        }
+
+        for {
+<span class="nc" id="L58">          segName &lt;- futureMaybeSegName</span>
+<span class="nc" id="L59">          productName &lt;- futureMaybeProductName</span>
+<span class="nc" id="L60">          eventName &lt;- futureMaybeEventName</span>
+        } yield {
+<span class="nc" id="L62">          val properties = Map(</span>
+<span class="nc" id="L63">            &quot;name&quot; -&gt; message.name,</span>
+<span class="nc" id="L64">            &quot;platform&quot; -&gt; message.platform.toString,</span>
+<span class="nc" id="L65">            &quot;segmentName&quot; -&gt; segName.getOrElse(&quot;no seg&quot;),</span>
+<span class="nc" id="L66">            &quot;product&quot; -&gt; productName.getOrElse(&quot;no product&quot;),</span>
+<span class="nc" id="L67">            &quot;triggerTime&quot; -&gt; rule.limit.map(_.toString).getOrElse(&quot;no limit&quot;),</span>
+<span class="nc" id="L68">            &quot;triggerEvent&quot; -&gt; eventName.getOrElse(&quot;no event&quot;),</span>
+<span class="nc" id="L69">            &quot;assetURL&quot; -&gt; message.contentUrl.getOrElse(&quot;no url&quot;),</span>
+<span class="nc" id="L70">            &quot;type&quot; -&gt; from)</span>
+<span class="nc" id="L71">          TrackingUtil.traceForGIO(&quot;popupActive&quot;, message.updaterId.toString, properties)</span>
+        }
+<span class="nc bnc" id="L73" title="All 2 branches missed.">    }.recover {</span>
+<span class="nc bnc" id="L74" title="All 4 branches missed.">      case t: Throwable =&gt;</span>
+        // ignore
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        logger.error(t.getMessage)</span>
+    }
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

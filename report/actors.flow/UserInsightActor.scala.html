@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserInsightActor.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">actors.flow</a> &gt; <span class="el_source">UserInsightActor.scala</span></div><h1>UserInsightActor.scala</h1><pre class="source lang-java linenums">package actors.flow
+
+import java.util.concurrent.{ ThreadLocalRandom, TimeUnit }
+
+import actors.Injector
+import akka.actor.{ Actor, ActorRef, Props }
+import com.typesafe.scalalogging.LazyLogging
+import dtos.Messages.PushTaskRequest
+import dtos.{ GroupUsersRequest, PushTaskRequestDto, UserInfo }
+import javax.inject.Inject
+import play.api.http.Status
+import play.api.libs.json.{ JsError, JsSuccess, Json }
+import play.api.libs.ws.ahc.AhcCurlRequestLogger
+
+import scala.collection.JavaConverters
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
+/**
+ * @author : xhldtc
+ * @since : 2019/12/18
+ */
+<span class="pc bnc" id="L25" title="All 4 branches missed.">class UserInsightActor @Inject() (injector: Injector) extends Actor with LazyLogging {</span>
+
+<span class="fc" id="L27">  private val configParams = injector.configParams</span>
+<span class="pc" id="L28">  private val ws = injector.WSClient</span>
+<span class="pc" id="L29">  private val DEFAULT_USERS_SIZE = configParams.qsRequestInsightBatchSize</span>
+
+<span class="pc bpc" id="L31" title="1 of 2 branches missed.">  override def receive: Receive = {</span>
+<span class="nc bnc" id="L32" title="All 6 branches missed.">    case pushTaskRequest: PushTaskRequest =&gt; process(pushTaskRequest, sender()).recover {</span>
+<span class="nc bnc" id="L33" title="All 6 branches missed.">      case t: Throwable =&gt; logger.error(s&quot;query insight failed: ${pushTaskRequest.toString}&quot;, t)</span>
+    }
+  }
+
+  private def process(pushTaskRequest: PushTaskRequest, sender: ActorRef): Future[Any] = {
+<span class="nc" id="L38">    usersList(pushTaskRequest.getProjectId, pushTaskRequest.getAi, pushTaskRequest.getGroupId, pushTaskRequest.getField,</span>
+<span class="nc" id="L39">      JavaConverters.collectionAsScalaIterable(pushTaskRequest.getAttrsList).toSeq, pushTaskRequest.getStart,</span>
+<span class="nc" id="L40">      pushTaskRequest.getEnd).map(sender ! PushTaskRequestDto(pushTaskRequest, _))</span>
+  }
+
+  def usersList(projectId: Int, ai: String, groupId: String, field: String, attrList: Seq[String], start: Int, end: Int): Future[Seq[UserInfo]] = {
+<span class="nc" id="L44">    var index = start</span>
+<span class="nc" id="L45">    val requests = new ArrayBuffer[GroupUsersRequest]()</span>
+    // todo: 一个登陆用户对应多个设备的情况下 total 小于实际设备数
+<span class="nc bnc" id="L47" title="All 2 branches missed.">    while (index &lt; end) {</span>
+<span class="nc" id="L48">      val request = GroupUsersRequest(</span>
+<span class="nc" id="L49">        ai = ai,</span>
+<span class="nc" id="L50">        tagId = groupId,</span>
+<span class="nc" id="L51">        field = field,</span>
+<span class="nc" id="L52">        startIndex = index,</span>
+<span class="nc" id="L53">        endIndex = index + DEFAULT_USERS_SIZE,</span>
+<span class="nc" id="L54">        attrs = attrList.mkString(&quot;,&quot;))</span>
+<span class="nc" id="L55">      index += DEFAULT_USERS_SIZE</span>
+<span class="nc" id="L56">      requests.append(request)</span>
+    }
+<span class="nc" id="L58">    requestInsightBatch(0, requests, Future.successful(Seq()))</span>
+  }
+
+  //同步串行调用qs,在拿到前个查询返回的response之后才发下一个请求
+  @scala.annotation.tailrec
+  private def requestInsightBatch(index: Int, requests: Seq[GroupUsersRequest], result: Future[Seq[UserInfo]]): Future[Seq[UserInfo]] = {
+<span class="nc" id="L64">    index match {</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">      case end if end &gt;= requests.size =&gt; result</span>
+      case i =&gt;
+        val currentResult = for {
+<span class="nc" id="L68">          userInfos &lt;- result</span>
+<span class="nc" id="L69">          next &lt;- requestInsight(requests(i))</span>
+<span class="nc" id="L70">        } yield userInfos ++ next</span>
+<span class="nc" id="L71">        val delayMills = ThreadLocalRandom.current().nextInt(configParams.qsRequestDelayMinMillis, configParams.qsRequestDelayMaxMillis)</span>
+<span class="nc" id="L72">        TimeUnit.MILLISECONDS.sleep(delayMills)</span>
+<span class="nc" id="L73">        requestInsightBatch(i + 1, requests, currentResult)</span>
+    }
+  }
+
+<span class="nc" id="L77">  private def requestInsight(request: GroupUsersRequest): Future[Seq[UserInfo]] = {</span>
+<span class="nc" id="L78">    val url = configParams.qsHost + configParams.qsPort + configParams.insightPath</span>
+<span class="nc" id="L79">    ws.url(url)</span>
+<span class="nc" id="L80">      .withRequestTimeout(configParams.qsRequestTimeoutMillis.millis)</span>
+<span class="nc" id="L81">      .withRequestFilter(AhcCurlRequestLogger())</span>
+<span class="nc" id="L82">      .post(Json.toJson(request))</span>
+<span class="nc" id="L83">      .map { response =&gt;</span>
+<span class="nc" id="L84">        response.status match {</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">          case Status.OK =&gt;</span>
+<span class="nc" id="L86">            Json.fromJson[Seq[UserInfo]](Json.parse(response.body)) match {</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">              case JsSuccess(values, _) =&gt; values</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">              case e @ JsError(_) =&gt;</span>
+<span class="nc" id="L89">                throw new Exception(JsError.toJson(e).toString())</span>
+            }
+<span class="nc" id="L91">          case _ =&gt; throw new Exception(response.toString)</span>
+        }
+<span class="nc bnc" id="L93" title="All 2 branches missed.">      }.recover {</span>
+<span class="nc bnc" id="L94" title="All 4 branches missed.">        case t: Throwable =&gt;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">          logger.error(s&quot;request failed for path: $url and request ${Json.toJson(request)}&quot;, t)</span>
+<span class="nc" id="L96">          Seq()</span>
+      }
+  }
+}
+
+<span class="fc" id="L101">object UserInsightActor {</span>
+
+<span class="fc" id="L103">  def props(injector: Injector): Props = Props[UserInsightActor](new UserInsightActor(injector))</span>
+
+<span class="fc" id="L105">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

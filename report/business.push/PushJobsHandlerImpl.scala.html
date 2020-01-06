@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushJobsHandlerImpl.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">business.push</a> &gt; <span class="el_source">PushJobsHandlerImpl.scala</span></div><h1>PushJobsHandlerImpl.scala</h1><pre class="source lang-java linenums">package business.push
+
+import java.util.UUID
+
+import actors.protocol.JobProtocols.{ CheckPointedTasks, TasksNeedCheckpoint }
+import actors.{ EndpointActor, Injector }
+import akka.actor.ActorSystem
+import com.google.inject.Inject
+import com.typesafe.scalalogging.LazyLogging
+import dao._
+import dtos.Messages.PushTaskRequest
+import dtos.{ JobContext, PushTaskDto, SegmentDto }
+import infrastructure.kafka.KafkaCommonClient
+import infrastructure.measurement.MessageMeasurementHandler
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.exception.BadRequestException
+import io.growing.micros.play.mvc.FutureUtils
+import javax.inject.Singleton
+import model._
+import model.context.AppMessageContext
+import service.AppPushMessageService
+
+import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * PushJobsHandlerImpl
+ *
+ * @author damon lin
+ *         2019/5/8
+ */
+@Singleton
+<span class="pc bnc" id="L35" title="All 4 branches missed.">class PushJobsHandlerImpl @Inject() (</span>
+<span class="fc" id="L36">  pushJobDao: PushJobDao,</span>
+  actorSystem: ActorSystem,
+<span class="fc" id="L38">  injector: Injector,</span>
+<span class="fc" id="L39">  pushRuleDao: PushRuleDao,</span>
+<span class="fc" id="L40">  productDao: ProductDao,</span>
+<span class="fc" id="L41">  pushChannelDao: PushChannelDao,</span>
+<span class="fc" id="L42">  pushMessageDao: PushMessageDao,</span>
+<span class="fc" id="L43">  segmentationDao: SegmentationDao,</span>
+<span class="fc" id="L44">  appPushMessageService: AppPushMessageService,</span>
+<span class="fc" id="L45">  pushMetricsHandler: MessageMeasurementHandler) extends PushJobsHandler with LazyLogging with FutureUtils {</span>
+
+<span class="pc" id="L47">  private val pushJobEndpointActor = actorSystem.actorOf(EndpointActor.props(injector), &quot;endpoint-actor-push-message-service-ref&quot;)</span>
+
+<span class="pc" id="L49">  private val DEFAULT_BATCH_SIZE = injector.configParams.pushTokenQueryBatchSize</span>
+
+<span class="pc" id="L51">  private val kafkaPushClient = KafkaCommonClient[PushTaskRequest](Statics.TOPIC_PUSH_REQUEST, injector.config)</span>
+
+  override def publishPushJob(context: AppMessageContext): Future[_] = {
+<span class="nc" id="L54">    val pushMessage = context.message.get</span>
+<span class="nc" id="L55">    val projectId = context.project.id.get</span>
+<span class="nc bnc" id="L56" title="All 2 branches missed.">    if (context.users.isEmpty) {</span>
+<span class="nc" id="L57">      publishPushJobBySegment(context.message.get)</span>
+    } else {
+      //users不为空，就是API推送逻辑, API推送rule和product暂时只支持一个
+<span class="nc" id="L60">      val pushRule = context.rules.get.head</span>
+<span class="nc" id="L61">      val dbJobFuture = pushJobDao.findByMessageId(projectId, pushMessage.id.get)</span>
+<span class="nc" id="L62">        .flatMap {</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">          case Some(job) =&gt; Future.successful(job)</span>
+          //没找到job说明是当前message的第一批推送，创建实时和pushJob
+          case _ =&gt;
+<span class="nc" id="L66">            val pushJob = PushJob.fromMessage(pushMessage).copy(state = Status.planning)</span>
+<span class="nc" id="L67">            pushJobDao.insert(pushJob)</span>
+        }
+      for {
+<span class="nc" id="L70">        dbPushJob &lt;- dbJobFuture</span>
+<span class="nc" id="L71">        products &lt;- productDao.findByIds(projectId, Seq(pushRule.productId.get))</span>
+<span class="nc" id="L72">        pushChannels &lt;- pushChannelDao.findByProject(projectId)</span>
+      } yield {
+<span class="nc" id="L74">        appPushMessageService.buildJobContexts(context.users, pushMessage, dbPushJob, products, Seq(pushRule), pushChannels)</span>
+<span class="nc" id="L75">          .foreach(pushJobEndpointActor ! TasksNeedCheckpoint(_))</span>
+      }
+    }
+  }
+
+  override def publishPushJobBySegment(message: PushMessage): Future[_] = {
+<span class="nc" id="L81">    val pushJob = PushJob.fromMessage(message)</span>
+    for {
+<span class="nc" id="L83">      job &lt;- pushJobDao.insert(pushJob) // insert initialed job</span>
+<span class="nc" id="L84">      maybeSegmentation &lt;- segmentationDao.findById(job.projectId, job.audienceId.get)</span>
+    } yield {
+<span class="nc" id="L86">      val userNum = maybeSegmentation.map(s =&gt; s.userNum.getOrElse(0)).getOrElse(0)</span>
+<span class="nc" id="L87">      val segment = SegmentDto.fromJob(job, userNum)</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">      logger.info(s&quot;push message ${message.id} has total segment user count: ${segment.total}&quot;)</span>
+<span class="nc" id="L89">      Future.traverse(buildPushRequests(job, segment)) { pushRequest =&gt;</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        logger.info(s&quot;kafka client try to send message: ${pushRequest.getMessageId}&quot;)</span>
+<span class="nc" id="L91">        kafkaPushClient.send(pushRequest).map {</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">          case Left(t) =&gt;</span>
+<span class="nc bnc" id="L93" title="All 2 branches missed.">            logger.error(s&quot;send push request to kafka failed: ${pushRequest.toString}&quot;, t)</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">          case Right(recordMetadata) =&gt;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">            logger.info(s&quot;send push request ${pushRequest.toString} to kafka succeed: ${recordMetadata.toString}&quot;)</span>
+<span class="nc" id="L96">            recordMetadata</span>
+        }
+<span class="nc" id="L98">      }.onComplete(_ =&gt; pushJobDao.update(job.projectId, job.id.get, job.copy(state = Status.planning)))</span>
+    }
+  }
+
+  //push preview测试使用
+  override def publishPushJobByTokens(message: PushMessage, rule: PushRule, channel: PushChannel, tokens: List[String]): Unit = {
+<span class="nc" id="L104">    val task = PushTask.buildPreviewTask(message, channel, tokens)</span>
+<span class="nc" id="L105">    val jobContext = JobContext.buildPreviewJob(message, Seq(PushTaskDto(task, channel)), rule)</span>
+    // todo: save a task
+<span class="nc" id="L107">    pushJobEndpointActor ! CheckPointedTasks(jobContext)</span>
+  }
+
+  override def publishPushRequests(pushTaskRequest: PushTaskRequest): Unit = {
+<span class="nc" id="L111">    pushJobEndpointActor ! pushTaskRequest</span>
+  }
+
+  //重试task的时候使用
+  override def publishPushTask(pushTask: PushTask): Unit = {
+    for {
+<span class="nc" id="L117">      pushMessage &lt;- pushMessageDao.findByMsgId(pushTask.messageId)</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">      maybeChannel &lt;- injector.pushChannelDao.findById(pushMessage.projectId, pushTask.channel)</span>
+<span class="nc" id="L119">      maybeProductId = maybeChannel.map(_.productId)</span>
+<span class="nc" id="L120">      maybeRule &lt;- pushRuleDao.findByMessageId(pushTask.messageId).map {</span>
+<span class="nc bnc" id="L121" title="All 6 branches missed.">        _.find(rule =&gt; rule.productId.nonEmpty &amp;&amp; maybeProductId.nonEmpty &amp;&amp; rule.productId.get == maybeProductId.get)</span>
+      }
+    } yield {
+<span class="nc bnc" id="L124" title="All 4 branches missed.">      if (maybeChannel.isEmpty || maybeRule.isEmpty) {</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        logger.warn(s&quot;failed to find valid relation bean of task ${pushTask.taskId}&quot;)</span>
+      } else {
+<span class="nc" id="L127">        val dummyJob = PushJob.fromMessage(pushMessage)</span>
+<span class="nc" id="L128">        val dummySegment = SegmentDto.fromJob(dummyJob, 0)</span>
+<span class="nc" id="L129">        val pushTaskDto = PushTaskDto(pushTask, maybeChannel.get)</span>
+<span class="nc" id="L130">        val jobContext = JobContext(dummyJob, pushMessage, dummySegment, maybeRule.get, Seq(pushTaskDto))</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        logger.info(s&quot;publishing task ${pushTask.taskId}&quot;)</span>
+        //后面的actor，其实只用到了message,rule和taskDto，job和segment其实没用，这里构建了两个假的传进去
+<span class="nc" id="L133">        pushJobEndpointActor ! CheckPointedTasks(jobContext)</span>
+      }
+    }
+  }
+
+  @Deprecated //can be deleted in future
+  override def buildEmptyJobContext(job: PushJob): Future[Seq[JobContext]] = {
+    for {
+<span class="nc" id="L141">      maybeMessage &lt;- pushMessageDao.findById(job.messageId, job.projectId)</span>
+<span class="nc" id="L142">      rules &lt;- pushRuleDao.findByMessageId(job.messageId)</span>
+<span class="nc" id="L143">      maybeSegmentation &lt;- segmentationDao.findById(job.projectId, job.audienceId.get)</span>
+    } yield {
+      // todo: 每条 rule 都生成一个 context 对于多个 Android 同时推送的场景后续查询有重复的地方
+<span class="nc" id="L146">      rules.map { rule =&gt;</span>
+<span class="nc" id="L147">        val userNum = maybeSegmentation.map(s =&gt; s.userNum.getOrElse(0)).getOrElse(0)</span>
+<span class="nc" id="L148">        JobContext(</span>
+<span class="nc" id="L149">          job,</span>
+<span class="nc" id="L150">          maybeMessage.get,</span>
+<span class="nc" id="L151">          SegmentDto.fromJob(job, userNum),</span>
+<span class="nc" id="L152">          rule,</span>
+<span class="nc" id="L153">          Seq.empty // empty tasks</span>
+        )
+      }
+    }
+  }
+
+  /**
+   * 根据jobContext下分群用户的数量分段，默认分段大小为1W，分段后丢给kafka让集群去并发消费，提高推送效率
+   *
+   */
+  private[this] def buildPushRequests(pushJob: PushJob, segmentDto: SegmentDto): Seq[PushTaskRequest] = {
+<span class="nc" id="L164">    val total = segmentDto.total</span>
+<span class="nc" id="L165">    (0 to total by DEFAULT_BATCH_SIZE).map { i =&gt; (i, i + DEFAULT_BATCH_SIZE) }</span>
+<span class="nc" id="L166">      .map { range =&gt;</span>
+<span class="nc" id="L167">        val start = range._1</span>
+<span class="nc" id="L168">        val end = Math.min(range._2, total)</span>
+<span class="nc" id="L169">        PushTaskRequest.newBuilder()</span>
+<span class="nc" id="L170">          .setId(UUID.randomUUID().toString)</span>
+<span class="nc" id="L171">          .setProjectId(pushJob.projectId)</span>
+<span class="nc" id="L172">          .setMessageId(pushJob.messageId)</span>
+<span class="nc" id="L173">          .setJobId(pushJob.id.getOrElse(-1))</span>
+<span class="nc" id="L174">          .setAi(segmentDto.ai)</span>
+<span class="nc" id="L175">          .setGroupId(segmentDto.segmentId)</span>
+<span class="nc" id="L176">          .setField(segmentDto.field)</span>
+<span class="nc" id="L177">          .addAllAttrs(Statics.PushVariables.asJava)</span>
+<span class="nc" id="L178">          .setStart(start)</span>
+<span class="nc" id="L179">          .setEnd(end)</span>
+          .build()
+      }
+  }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

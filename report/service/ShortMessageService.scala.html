@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShortMessageService.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">service</a> &gt; <span class="el_source">ShortMessageService.scala</span></div><h1>ShortMessageService.scala</h1><pre class="source lang-java linenums">package service
+
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ ShortMessageDao, SmsConfigDao }
+import dtos.{ ShortMessageDto, TemplateContentDto }
+import form.ShortMessageForm
+import handlers.impl.YunpianSmsHandlerImpl
+import handlers.{ AliyunSmsHandler, ShortMessageHandler }
+import io.growing.marketing.common.model.{ ShortMessage, SmsProvider }
+import io.growing.micros.business.model.{ Project, Status }
+import io.growing.micros.play.exception.BadRequestException
+import io.growing.micros.play.mvc.FutureUtils
+import javax.inject.{ Inject, Singleton }
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+@Singleton
+<span class="nc bnc" id="L19" title="All 4 branches missed.">class ShortMessageService @Inject() (</span>
+<span class="nc" id="L20">  shortMessageDao: ShortMessageDao,</span>
+<span class="nc" id="L21">  smsConfigDao: SmsConfigDao,</span>
+<span class="nc" id="L22">  shortMessageHandler: ShortMessageHandler,</span>
+<span class="nc" id="L23">  aliyunSmsHandler: AliyunSmsHandler,</span>
+<span class="nc" id="L24">  yunpianSmsHandler: YunpianSmsHandlerImpl) extends FutureUtils with LazyLogging {</span>
+
+  def create(form: ShortMessageForm, project: Project, creatorId: Int): Future[Either[String, ShortMessageDto]] = {
+    for {
+<span class="nc bnc" id="L28" title="All 2 branches missed.">      _ &lt;- checkDuplicateName(form.name, project.dbid)</span>
+<span class="nc" id="L29">      shortMsg = form.buildShortMessage(project, creatorId)</span>
+<span class="nc" id="L30">      _ &lt;- checkSmsConfig(shortMsg)</span>
+<span class="nc" id="L31">      result &lt;- processOfCreation(shortMsg, project)</span>
+<span class="nc" id="L32">    } yield result</span>
+  }
+
+  def update(form: ShortMessageForm, project: Project, updaterId: Int, shortMsgId: Int): Future[Either[String, ShortMessageDto]] = {
+    for {
+<span class="nc" id="L37">      msgOpt &lt;- shortMessageDao.findByShortMessageId(shortMsgId)</span>
+<span class="nc" id="L38">      _ &lt;- failCondition(msgOpt.isEmpty, BadRequestException(&quot;该条短信不存在&quot;))</span>
+<span class="nc bnc" id="L39" title="All 2 branches missed.">      _ &lt;- checkDuplicateNameInOthers(form.name, shortMsgId, project.dbid)</span>
+<span class="nc" id="L40">      newShortMsg = shortMessageHandler.updateShortMessage(form, msgOpt.get, updaterId)</span>
+<span class="nc" id="L41">      _ &lt;- checkSmsConfig(newShortMsg)</span>
+<span class="nc" id="L42">      result &lt;- processOfUpdate(newShortMsg, shortMsgId, project)</span>
+<span class="nc" id="L43">    } yield result</span>
+  }
+
+  def findAllShortMessages(projectId: Int): Future[Seq[ShortMessageDto]] = {
+<span class="nc" id="L47">    shortMessageDao.findByProjectId(projectId).flatMap { messages =&gt;</span>
+<span class="nc" id="L48">      Future.traverse(messages)(shortMsg =&gt; Future.successful(ShortMessageDto(shortMsg)))</span>
+    }
+  }
+
+  def findSingleShortMessage(shortMsgId: Int): Future[Either[String, ShortMessageDto]] = {
+<span class="nc" id="L53">    shortMessageDao.findByShortMessageId(shortMsgId).map {</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">      case None =&gt; Left(&quot;未找到该条短信&quot;)</span>
+<span class="nc bnc" id="L55" title="All 2 branches missed.">      case Some(shortMsg) =&gt; Right(ShortMessageDto(shortMsg))</span>
+    }
+  }
+
+  def archiveShortMsg(projectId: Int, shortMsgId: Int): Future[Either[String, String]] = {
+<span class="nc" id="L60">    shortMessageDao.findByShortMessageId(shortMsgId).map {</span>
+<span class="nc bnc" id="L61" title="All 2 branches missed.">      case None =&gt; Left(&quot;未找到该条短信&quot;)</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">      case Some(_) =&gt;</span>
+<span class="nc" id="L63">        shortMessageDao.deleteShortMessage(shortMsgId)</span>
+<span class="nc" id="L64">        Right(&quot;删除成功&quot;)</span>
+    }
+  }
+
+  def getTemplateContent(templateCode: String, configId: Int): Future[Either[String, TemplateContentDto]] = {
+<span class="nc" id="L69">    smsConfigDao.findByConfigId(configId).map {</span>
+<span class="nc bnc" id="L70" title="All 2 branches missed.">      case None =&gt; Left(&quot;未找到短信配置信息&quot;)</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">      case Some(config) =&gt;</span>
+<span class="nc" id="L72">        val template = config.smsProvider match {</span>
+<span class="nc bnc" id="L73" title="All 6 branches missed.">          case SmsProvider.aliyun =&gt;</span>
+<span class="nc" id="L74">            aliyunSmsHandler.queryTemplate(templateCode, config)</span>
+<span class="nc bnc" id="L75" title="All 6 branches missed.">          case SmsProvider.yunpian =&gt;</span>
+<span class="nc" id="L76">            yunpianSmsHandler.queryTemplate(templateCode, config)</span>
+        }
+<span class="nc" id="L78">        template.fold(</span>
+<span class="nc" id="L79">          l =&gt; Left(l),</span>
+<span class="nc" id="L80">          r =&gt; {</span>
+<span class="nc" id="L81">            val params = shortMessageHandler.getTemplateParams(r, config)</span>
+<span class="nc" id="L82">            Right(TemplateContentDto(r, params))</span>
+          })
+    }
+  }
+
+  def getSignName(signName: String, configId: Int): Future[Either[String, String]] = {
+<span class="nc" id="L88">    smsConfigDao.findByConfigId(configId).flatMap {</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">      case None =&gt; Future.successful(Left(&quot;未找到短信配置信息&quot;))</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">      case Some(config) =&gt;</span>
+<span class="nc" id="L91">        config.smsProvider match {</span>
+<span class="nc bnc" id="L92" title="All 6 branches missed.">          case SmsProvider.aliyun =&gt;</span>
+<span class="nc" id="L93">            Future.successful(aliyunSmsHandler.querySignName(signName, config).fold(l =&gt; Left(l), r =&gt; Right(r)))</span>
+        }
+    }
+  }
+
+  private def processOfCreation(msg: ShortMessage, project: Project) = {
+<span class="nc" id="L99">    msg.state match {</span>
+<span class="nc bnc" id="L100" title="All 6 branches missed.">      case Status.draft =&gt;</span>
+<span class="nc" id="L101">        shortMessageDao.insert(msg).map(msg =&gt; Right(ShortMessageDto(msg)))</span>
+    }
+  }
+
+  private def processOfUpdate(newMsg: ShortMessage, shortMsgId: Int, project: Project) = {
+<span class="nc" id="L106">    newMsg.state match {</span>
+<span class="nc bnc" id="L107" title="All 6 branches missed.">      case Status.draft =&gt;</span>
+<span class="nc" id="L108">        shortMessageDao.updateShortMessage(shortMsgId, newMsg)</span>
+<span class="nc" id="L109">        Future.successful(Right(ShortMessageDto(newMsg)))</span>
+<span class="nc bnc" id="L110" title="All 6 branches missed.">      case Status.test =&gt;</span>
+<span class="nc" id="L111">        processTestShortMsg(newMsg).flatMap(updateOrError(_, shortMsgId))</span>
+<span class="nc bnc" id="L112" title="All 6 branches missed.">      case Status.planning =&gt;</span>
+<span class="nc" id="L113">        processPlanShortMsg(newMsg).flatMap(updateOrError(_, shortMsgId))</span>
+<span class="nc bnc" id="L114" title="All 6 branches missed.">      case Status.activated =&gt;</span>
+        for {
+<span class="nc" id="L116">          _ &lt;- failCondition(newMsg.ableToActive.isDefined, BadRequestException(newMsg.ableToActive.get))</span>
+<span class="nc" id="L117">          _ &lt;- shortMessageDao.updateShortMessage(shortMsgId, newMsg)</span>
+<span class="nc" id="L118">          result &lt;- processActiveShortMsg(shortMsgId, newMsg, project)</span>
+<span class="nc" id="L119">        } yield result</span>
+    }
+  }
+
+  private def processTestShortMsg(shortMsg: ShortMessage) = {
+    for {
+<span class="nc" id="L125">      _ &lt;- failCondition(shortMsg.ableToTest.isDefined, BadRequestException(shortMsg.ableToTest.get))</span>
+<span class="nc" id="L126">      r &lt;- shortMessageHandler.sendTestShortMessage(shortMsg)</span>
+    } yield {
+<span class="nc" id="L128">      r match {</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        case Left(error) =&gt; Left(error)</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        case Right(_) =&gt; Right(shortMsg)</span>
+      }
+    }
+  }
+
+  private def processPlanShortMsg(shortMsg: ShortMessage) = {
+<span class="nc" id="L136">    shortMessageHandler.checkPlanningShortMessage(shortMsg).map {</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">      case Some(error) =&gt; Left(error)</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">      case None =&gt; Right(shortMsg)</span>
+    }
+  }
+
+  private def processActiveShortMsg(shortMsgId: Int, shortMsg: ShortMessage, project: Project) = {
+<span class="nc" id="L143">    shortMessageHandler.sendActivatedShortMessages(shortMsg, project.keyid).map { str =&gt;</span>
+<span class="nc" id="L144">      val msg = shortMsg.copy(sendResult = Some(str))</span>
+<span class="nc" id="L145">      shortMessageDao.updateShortMessage(shortMsgId, msg)</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">      if (str.equals(&quot;&quot;)) {</span>
+<span class="nc" id="L147">        Right(ShortMessageDto(msg))</span>
+      } else {
+<span class="nc" id="L149">        Left(str)</span>
+      }
+    }
+  }
+
+  private def updateOrError(e: Either[String, ShortMessage], shortMsgId: Int) = {
+    def update(shortMsg: ShortMessage) = {
+<span class="nc" id="L156">      shortMessageDao.updateShortMessage(shortMsgId, shortMsg)</span>
+<span class="nc" id="L157">      Future.successful(Right(ShortMessageDto(shortMsg)))</span>
+    }
+<span class="nc" id="L159">    e.fold(</span>
+<span class="nc" id="L160">      l =&gt; Future.successful(Left(l)),</span>
+<span class="nc" id="L161">      r =&gt; update(r))</span>
+  }
+
+  private def checkDuplicateName(name: String, projectId: Int) = {
+<span class="nc" id="L165">    shortMessageDao.findByName(name, projectId).flatMap { msgOpt =&gt;</span>
+<span class="nc" id="L166">      failCondition(msgOpt.isDefined, BadRequestException(s&quot;$name 已存在,请更换名字&quot;))</span>
+    }
+  }
+
+  private def checkDuplicateNameInOthers(name: String, id: Int, projectId: Int) = {
+<span class="nc" id="L171">    shortMessageDao.findByNameInOthers(name, projectId, id).flatMap { msgOpt =&gt;</span>
+<span class="nc" id="L172">      failCondition(msgOpt.isDefined, BadRequestException(s&quot;$name 已存在,请更换名字&quot;))</span>
+    }
+  }
+
+  private def checkSmsConfig(shortMsg: ShortMessage) = {
+    for {
+<span class="nc" id="L178">      configOpt &lt;- smsConfigDao.findByConfigId(shortMsg.configId)</span>
+<span class="nc bnc" id="L179" title="All 2 branches missed.">      _ &lt;- failCondition(configOpt.isEmpty, BadRequestException(&quot;未找到短信配置&quot;))</span>
+<span class="nc" id="L180">      config = configOpt.get</span>
+<span class="nc" id="L181">      legality = config.smsProvider match {</span>
+<span class="nc bnc" id="L182" title="All 6 branches missed.">        case SmsProvider.aliyun =&gt;</span>
+<span class="nc bnc" id="L183" title="All 6 branches missed.">          config.providerValue.isDefined &amp;&amp; config.numAttribute.isDefined &amp;&amp; config.signNames.nonEmpty</span>
+<span class="nc bnc" id="L184" title="All 6 branches missed.">        case SmsProvider.yunpian =&gt;</span>
+<span class="nc bnc" id="L185" title="All 4 branches missed.">          config.numAttribute.isDefined &amp;&amp; config.signNames.nonEmpty</span>
+<span class="nc bnc" id="L186" title="All 6 branches missed.">        case SmsProvider.chuanglan =&gt;</span>
+<span class="nc bnc" id="L187" title="All 8 branches missed.">          config.providerValue.isDefined &amp;&amp; config.numAttribute.isDefined &amp;&amp; config.signNames.nonEmpty &amp;&amp; config.sendPath.isDefined</span>
+      }
+<span class="nc bnc" id="L189" title="All 2 branches missed.">      _ &lt;- failCondition(!legality, BadRequestException(&quot;短信配置不合法&quot;))</span>
+<span class="nc" id="L190">    } yield ()</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

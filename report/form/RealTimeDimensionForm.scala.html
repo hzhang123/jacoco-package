@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RealTimeDimensionForm.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">form</a> &gt; <span class="el_source">RealTimeDimensionForm.scala</span></div><h1>RealTimeDimensionForm.scala</h1><pre class="source lang-java linenums">package form
+
+import play.api.libs.json.{ Json, OFormat }
+
+/**
+ * @author wusi
+ * @since 2019-05-16 17:07
+ * @param eventIds        事件ID 编码后
+ * @param dimension      事件级变量标识符
+ * @param dimensionValue 维度值
+ * @param deltaCount     新增触达消息 为 1，删除触达消息为-1
+ */
+<span class="nc bnc" id="L13" title="All 37 branches missed.">case class RealTimeDimensionForm(</span>
+<span class="nc" id="L14">  dimension: String,</span>
+<span class="nc" id="L15">  dimensionValue: String,</span>
+<span class="nc" id="L16">  eventIds: Seq[String],</span>
+<span class="nc" id="L17">  deltaCount: Int) {</span>
+
+}
+
+<span class="nc" id="L21">object RealTimeDimensionForm {</span>
+<span class="nc bnc" id="L22" title="All 2 branches missed.">  implicit val realTimeDimensionDTOFormat: OFormat[RealTimeDimensionForm] = Json.format[RealTimeDimensionForm]</span>
+<span class="nc" id="L23">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

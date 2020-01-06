@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProjectAuthenticationComponent.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers.api</a> &gt; <span class="el_source">ProjectAuthenticationComponent.scala</span></div><h1>ProjectAuthenticationComponent.scala</h1><pre class="source lang-java linenums">package controllers.api
+
+import model.auth.WrappedRequests.AuthenticationRequest
+import play.api.libs.json.{ JsArray, Json }
+import play.api.mvc.{ ActionFilter, Results }
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future.successful
+import scala.concurrent.ExecutionContext.Implicits.global
+
+<span class="nc" id="L11">trait ProjectAuthenticationComponent {</span>
+<span class="nc" id="L12">  private lazy val projectUnauthorizedResult = Results.Forbidden(Json.obj(&quot;message&quot; -&gt; &quot;Unauthorized&quot;, &quot;errors&quot; -&gt; JsArray()))</span>
+
+<span class="nc bnc" id="L14" title="All 2 branches missed.">  def ProjectAuthenticationAction(key: String) = new ActionFilter[AuthenticationRequest] {</span>
+<span class="nc" id="L15">    override protected def executionContext: ExecutionContext = global</span>
+    def filter[A](request: AuthenticationRequest[A]) = {
+<span class="nc bnc" id="L17" title="All 6 branches missed.">      if (request.project.keyid == key) {</span>
+<span class="nc" id="L18">        successful(None)</span>
+      } else {
+<span class="nc" id="L20">        successful(Some(projectUnauthorizedResult))</span>
+      }
+    }
+  }
+
+<span class="nc bnc" id="L25" title="All 2 branches missed.">  def ProjectAuthenticationAction(projectId: Int) = new ActionFilter[AuthenticationRequest] {</span>
+<span class="nc" id="L26">    override protected def executionContext: ExecutionContext = global</span>
+    def filter[A](request: AuthenticationRequest[A]) = {
+<span class="nc bnc" id="L28" title="All 2 branches missed.">      if (request.projectId == projectId) {</span>
+<span class="nc" id="L29">        successful(None)</span>
+      } else {
+<span class="nc" id="L31">        successful(Some(projectUnauthorizedResult))</span>
+      }
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

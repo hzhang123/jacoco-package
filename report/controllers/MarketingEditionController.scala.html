@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MarketingEditionController.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers</a> &gt; <span class="el_source">MarketingEditionController.scala</span></div><h1>MarketingEditionController.scala</h1><pre class="source lang-java linenums">package controllers
+import com.typesafe.scalalogging.LazyLogging
+import io.growing.marketing.common.model.EditionStatus.EditionStatus
+import io.growing.marketing.common.model.EditionType.EditionType
+import io.growing.marketing.common.model.{MarketingEdition, MarketingLead}
+import io.growing.micros.business.auth._
+import io.growing.micros.business.controller.{AbstractController, ProjectActionComponent}
+import io.growing.micros.play.exception.BadRequestException
+import io.growing.micros.play.mvc.{FutureUtils, TimeoutAction}
+import io.growing.micros.utils.conversion.GrowingConversions._
+import javax.inject.{Inject, Singleton}
+import org.joda.time.DateTime
+import play.api.mvc.Results.Ok
+import play.api.mvc.{BodyParser, PlayBodyParsers}
+import service.MarketingEditionService
+import play.api.libs.json._
+import play.api.libs.json.Reads._
+import play.api.libs.functional.syntax._
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+@Singleton
+<span class="nc bnc" id="L24" title="All 16 branches missed.">class MarketingEditionController @Inject()(</span>
+<span class="nc" id="L25">	marketingEditionService: MarketingEditionService,</span>
+	ac: TimeoutAction,
+<span class="nc" id="L27">	errorFormatterAction: ErrorFormatterAction,</span>
+<span class="nc" id="L28">	parse: PlayBodyParsers,</span>
+<span class="nc" id="L29">) extends AbstractController with ProjectActionComponent with ACLControlComponent with LazyLogging with FutureUtils {</span>
+
+<span class="nc" id="L31">	val readPermission: String = AuthConstants.Marketing.Read</span>
+<span class="nc" id="L32">	val managePermission: String = AuthConstants.Marketing.Manage</span>
+
+	def Actions[B](projectUid: String, parse: BodyParser[B]) = {
+<span class="nc" id="L35">		WithTimeoutAction(parse) andThen errorFormatterAction andThen new AuthAction(parse) andThen</span>
+<span class="nc" id="L36">			ProjectAction(projectUid.toId)</span>
+	}
+
+<span class="nc" id="L39">	def find(projectUid: String, organizationUid: String) = Actions(projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L40">		val projectId = projectUid.toId</span>
+<span class="nc" id="L41">		val organizationId = organizationUid.toId</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">		logger.info(s&quot;MarketingEditionController get find request: $projectId $organizationId .&quot;)</span>
+<span class="nc" id="L43">		marketingEditionService.findByOrganizationId(organizationId).flatMap(me ⇒ {</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">			if (me.isEmpty) {</span>
+<span class="nc" id="L45">				marketingEditionService.insert(MarketingEdition.default(organizationId, request.userId))</span>
+			} else {
+<span class="nc" id="L47">				Future.successful(me.get)</span>
+			}
+<span class="nc" id="L49">		}).map(edition ⇒ {</span>
+<span class="nc" id="L50">			Ok(Json.toJson(MarketingEditionPresenter(edition.id.get.toUid, edition.organizationId.toUid, edition.status, edition.applyAt, edition.expiredAt, edition.`type`)))</span>
+		})
+	}
+
+<span class="nc bnc" id="L54" title="All 59 branches missed.">	case class MarketingEditionPresenter(</span>
+<span class="nc" id="L55">		id: String,</span>
+<span class="nc" id="L56">		organizationId: String,</span>
+<span class="nc" id="L57">		status: Option[EditionStatus],</span>
+<span class="nc" id="L58">		applyAt: Option[DateTime],</span>
+<span class="nc" id="L59">		expiredAt: Option[DateTime],</span>
+<span class="nc" id="L60">		`type`: Option[EditionType]</span>
+	)
+<span class="nc bnc" id="L62" title="All 6 branches missed.">	object MarketingEditionPresenter {</span>
+<span class="nc bnc" id="L63" title="All 2 branches missed.">		implicit val writes: Writes[MarketingEditionPresenter] = (o: MarketingEditionPresenter) =&gt; {</span>
+			Json.obj(
+				&quot;id&quot; -&gt; o.id,
+				&quot;organizationId&quot; -&gt; o.organizationId,
+				&quot;status&quot; -&gt; o.status,
+<span class="nc" id="L68">				&quot;applyAt&quot; -&gt; o.applyAt.map(_.getMillis),</span>
+<span class="nc" id="L69">				&quot;expiredAt&quot; -&gt; o.expiredAt.map(_.getMillis),</span>
+				&quot;type&quot; -&gt; o.`type`
+			)
+		}
+	}
+
+	/**
+	 * @todo 存储leads
+	 * @param organizationUid
+	 * @param projectUid
+	 * @return
+	 */
+<span class="nc" id="L81">	def applyTrial(projectUid: String, organizationUid: String) = Actions(projectUid, parse.empty).async {implicit request =&gt;</span>
+<span class="nc" id="L82">		val organizationId = organizationUid.toId</span>
+<span class="nc" id="L83">		val projectId = projectUid.toId</span>
+		for {
+<span class="nc" id="L85">			edition ← marketingEditionService.findOrCreate(organizationId, request.userId)</span>
+<span class="nc" id="L86">			_ ← failCondition(edition.`type`.isDefined, BadRequestException(&quot;请勿重复申请&quot;))</span>
+<span class="nc" id="L87">			_ ← marketingEditionService.createLead(MarketingLead.trailLead(organizationId, projectId, request.userId, None, None, request.headers.get(&quot;referer&quot;).getOrElse(&quot;https://www.growingio.com&quot;)))</span>
+<span class="nc" id="L88">			_ &lt;- marketingEditionService.applyTrial(edition, request.userId)</span>
+<span class="nc" id="L89">		} yield Ok(&quot;&quot;)</span>
+	}
+
+<span class="nc bnc" id="L92" title="All 38 branches missed.">	case class MarketingEditionForm(</span>
+<span class="nc" id="L93">		userPhone: Option[String],</span>
+<span class="nc" id="L94">		comment: Option[String],</span>
+<span class="nc" id="L95">		userName: Option[String]</span>
+	)
+
+<span class="nc bnc" id="L98" title="All 6 branches missed.">	object MarketingEditionForm {</span>
+<span class="nc" id="L99">		implicit val reads: Reads[MarketingEditionForm] = (</span>
+<span class="nc" id="L100">			(JsPath \ &quot;userPhone&quot;).readNullable[String] and</span>
+<span class="nc" id="L101">				(JsPath \ &quot;comment&quot;).readNullable[String] and</span>
+<span class="nc" id="L102">				(JsPath \ &quot;userName&quot;).readNullable[String])(MarketingEditionForm.apply _)</span>
+	}
+
+	/**
+	 * @todo 购买过程，我们不修改状态，只上报 leads
+	 * @param organizationUid
+	 * @param projectUid
+	 * @return
+	 */
+<span class="nc" id="L111">	def applyPurchase(projectUid: String, organizationUid: String) = Actions(projectUid, parse.tolerantJson).async(parse.tolerantJson) { implicit request ⇒</span>
+<span class="nc" id="L112">		request.body.validate[MarketingEditionForm].fold(</span>
+<span class="nc" id="L113">			errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L114">			form ⇒ {</span>
+<span class="nc" id="L115">				val organizationId = organizationUid.toId</span>
+<span class="nc" id="L116">				val projectId = projectUid.toId</span>
+<span class="nc" id="L117">				val lead = MarketingLead.purchaseLead(organizationId, projectId, request.userId, form.userName, form.userPhone, request.headers.get(&quot;referer&quot;).getOrElse(&quot;https://www.growingio.com&quot;), form.comment)</span>
+<span class="nc" id="L118">				marketingEditionService.delayTrail(organizationId)</span>
+<span class="nc" id="L119">				marketingEditionService.createLead(lead).map(_ ⇒ Ok(&quot;&quot;))</span>
+			}
+		)
+	}
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

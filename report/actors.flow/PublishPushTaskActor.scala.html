@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PublishPushTaskActor.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">actors.flow</a> &gt; <span class="el_source">PublishPushTaskActor.scala</span></div><h1>PublishPushTaskActor.scala</h1><pre class="source lang-java linenums">package actors.flow
+
+import actors.Injector
+import actors.protocol.JobProtocols.PublishTaskSuccess
+import akka.actor.{ ActorRef, Props }
+import dtos.Messages.KafkaPushMessage
+import dtos.{ JobContext, PushTaskDto }
+import io.growing.marketing.common.model.{ PushChannel, PushMessage, PushRule, PushTask }
+import javax.inject.Inject
+import model.Statics
+import model.Statics.ChannelName
+import infrastructure.kafka.KafkaCommonClient
+
+import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
+/**
+ * PublishPushTaskActor
+ *
+ * @author damon lin
+ *         2019/5/11
+ */
+<span class="pc bnc" id="L25" title="All 4 branches missed.">class PublishPushTaskActor @Inject() (injector: Injector)</span>
+<span class="fc" id="L26">  extends AbstractActor {</span>
+
+<span class="fc" id="L28">  private val configParams = injector.configParams</span>
+<span class="pc" id="L29">  private val kafkaChannelClient = KafkaCommonClient[KafkaPushMessage](configParams.pushChannelTopic, injector.config)</span>
+<span class="pc" id="L30">  private val pushTaskDao = injector.pushTaskDao</span>
+
+  override def process(jobContext: JobContext, sender: ActorRef): Future[Any] = {
+<span class="nc" id="L33">    publishTasks(jobContext.tasks, jobContext.message, jobContext.rule).map { ack =&gt;</span>
+<span class="nc" id="L34">      sender ! PublishTaskSuccess(jobContext)</span>
+<span class="nc" id="L35">      PublishTaskSuccess(jobContext)</span>
+    }
+  }
+
+  def publishTasks(tasks: Seq[PushTaskDto], pushMessage: PushMessage, rule: PushRule): Future[_] = {
+<span class="nc" id="L40">    val kafkaPushMessages = tasks.map(t =&gt; buildKafkaPushMessage(t.task, pushMessage, rule, t.channel))</span>
+<span class="nc" id="L41">    Future.traverse(kafkaPushMessages) { message =&gt;</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">      logger.info(s&quot; ${this.getClass.getSimpleName} kafka client try to send message: ${message.getId} .&quot;)</span>
+<span class="nc" id="L43">      kafkaChannelClient.send(message).map {</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">        case Left(t) =&gt;</span>
+<span class="nc bnc" id="L45" title="All 2 branches missed.">          logger.error(s&quot;${this.getClass.getSimpleName} send kafka message failed taskId: ${message.getTaskId}  message: ${message.getId} .&quot;)</span>
+<span class="nc" id="L46">          pushTaskDao.updateFailedTasks(Seq(message.getTaskId), t.getMessage)</span>
+<span class="nc bnc" id="L47" title="All 2 branches missed.">        case Right(recordMetadata) =&gt; recordMetadata</span>
+      }
+    }
+  }
+
+  private[this] def buildKafkaPushMessage(task: PushTask, message: PushMessage, rule: PushRule, channel: PushChannel): KafkaPushMessage = {
+<span class="nc" id="L53">    val messageExtra = rule.actionParameters ++ Map(&quot;gio_internal_actionType&quot; -&gt; rule.realActionType, &quot;gio_internal_actionTarget&quot; -&gt; rule.realActionTarget)</span>
+<span class="nc" id="L54">    val base = KafkaPushMessage.newBuilder()</span>
+<span class="nc" id="L55">      .setTitle(message.pushTitle)</span>
+<span class="nc" id="L56">      .setRestrictedPackageName(channel.packageName)</span>
+<span class="nc" id="L57">      .setId(message.uid) // 用于消息去重</span>
+<span class="nc" id="L58">      .putAllExtra(messageExtra.asJava)</span>
+<span class="nc" id="L59">      .setRetries(configParams.pushRetries)</span>
+<span class="nc" id="L60">      .setExpires(configParams.pushChannelExpires.days.toMillis.toInt)</span>
+<span class="nc" id="L61">      .setCreated(System.currentTimeMillis())</span>
+<span class="nc" id="L62">      .setDescription(message.pushPayload) // 小米推送的正文是在 description 里</span>
+<span class="nc" id="L63">      .setPayload(message.pushPayload)</span>
+<span class="nc" id="L64">      .setSecrectKey(channel.appSecret)</span>
+<span class="nc" id="L65">      .setAppKey(channel.appKey)</span>
+<span class="nc" id="L66">      .setAppId(channel.appId.getOrElse(&quot;&quot;))</span>
+<span class="nc" id="L67">      .setMessageName(message.name)</span>
+<span class="nc" id="L68">      .addAllAudience(task.audience.asJava)</span>
+<span class="nc" id="L69">      .setTaskId(task.taskId)</span>
+<span class="nc" id="L70">      .setChannel(channel.channelName)</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">    if (channel.isiOS) {</span>
+<span class="nc" id="L72">      base.putExtra(&quot;server&quot;, rule.actionParameters.getOrElse(&quot;server&quot;, rule.APNsServer))</span>
+<span class="nc" id="L73">        .putExtra(&quot;port&quot;, rule.actionParameters.getOrElse(&quot;port&quot;, &quot;443&quot;))</span>
+<span class="nc" id="L74">        .putExtra(&quot;gio_internal_ai&quot;, message.ai)</span>
+        .build()
+    } else {
+<span class="nc" id="L77">      base.putAllExtra(appendCallbackParameters(channel.channelName, message.callbackParameters).asJava)</span>
+<span class="nc" id="L78">      base.build()</span>
+    }
+  }
+
+  private def appendCallbackParameters(channel: String, parameters: String): Map[String, String] = {
+<span class="nc" id="L83">    channel match {</span>
+<span class="nc bnc" id="L84" title="All 6 branches missed.">      case ChannelName.XiaoMi =&gt;</span>
+<span class="nc" id="L85">        Map(&quot;callback&quot; -&gt; configParams.xiaoMiCallback, &quot;callback.param&quot; -&gt; parameters)</span>
+<span class="nc bnc" id="L86" title="All 6 branches missed.">      case ChannelName.Meizu =&gt;</span>
+        // meizu 需要在平台上配置后才能发这个信息
+<span class="nc" id="L88">        Map(&quot;callback&quot; -&gt; configParams.meiZuCallback, &quot;callback.param&quot; -&gt; parameters)</span>
+<span class="nc bnc" id="L89" title="All 6 branches missed.">      case ChannelName.Huawei =&gt;</span>
+<span class="nc" id="L90">        Map(&quot;biTag&quot; -&gt; parameters)</span>
+<span class="nc bnc" id="L91" title="All 6 branches missed.">      case ChannelName.Oppo =&gt;</span>
+<span class="nc" id="L92">        Map(&quot;callback&quot; -&gt; configParams.oppoCallback, &quot;callback.param&quot; -&gt; parameters)</span>
+<span class="nc bnc" id="L93" title="All 6 branches missed.">      case ChannelName.Vivo =&gt;</span>
+<span class="nc" id="L94">        Map(&quot;callback&quot; -&gt; configParams.vivoCallback, &quot;callback.param&quot; -&gt; parameters)</span>
+      case _ =&gt;
+<span class="nc" id="L96">        Map.empty</span>
+    }
+  }
+
+}
+
+<span class="fc" id="L102">object PublishPushTaskActor {</span>
+
+<span class="fc" id="L104">  def props(injector: Injector): Props = Props[PublishPushTaskActor](new PublishPushTaskActor(injector))</span>
+
+}
+<span class="fc" id="L107"></span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

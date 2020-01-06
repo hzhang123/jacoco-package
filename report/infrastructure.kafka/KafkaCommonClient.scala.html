@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KafkaCommonClient.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">infrastructure.kafka</a> &gt; <span class="el_source">KafkaCommonClient.scala</span></div><h1>KafkaCommonClient.scala</h1><pre class="source lang-java linenums">package infrastructure.kafka
+
+import java.util.{ Properties, UUID }
+
+import com.google.protobuf.Message
+import com.typesafe.config.Config
+import com.typesafe.scalalogging.LazyLogging
+import org.apache.kafka.clients.producer.{ KafkaProducer, Producer, ProducerRecord, RecordMetadata }
+import org.apache.kafka.common.serialization.StringSerializer
+import utils.FutureUtil
+
+import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.Try
+
+/**
+ * @author : xhldtc
+ * @since : 2019-09-11
+ */
+<span class="pc bnc" id="L21" title="All 4 branches missed.">class KafkaCommonClient[T &lt;: Message](topic: String, properties: Properties) extends LazyLogging {</span>
+
+<span class="nc bnc" id="L23" title="All 4 branches missed.">  private[this] lazy val producer: Producer[String, Message] = {</span>
+<span class="nc" id="L24">    val keySerializer = new StringSerializer</span>
+<span class="nc" id="L25">    val valueSerializer = new MessageSerializer</span>
+<span class="nc" id="L26">    new KafkaProducer[String, Message](properties, keySerializer, valueSerializer)</span>
+  }
+
+  def send(message: T): Future[Either[Throwable, RecordMetadata]] = {
+<span class="nc" id="L30">    val key = UUID.randomUUID().toString</span>
+<span class="nc" id="L31">    val record = new ProducerRecord[String, Message](topic, key, message)</span>
+<span class="nc bnc" id="L32" title="All 2 branches missed.">    FutureUtil.toScalaFuture(producer.send(record)).map(Right(_)).recover {</span>
+<span class="nc bnc" id="L33" title="All 4 branches missed.">      case e: Throwable =&gt;</span>
+<span class="nc bnc" id="L34" title="All 2 branches missed.">        logger.error(&quot;send to kafka failed!&quot;, e)</span>
+<span class="nc" id="L35">        Left(e)</span>
+    }
+  }
+
+<span class="nc" id="L39">  def close(): Unit = Try(producer.close())</span>
+}
+
+<span class="fc" id="L42">object KafkaCommonClient {</span>
+
+<span class="nc" id="L44">  def apply[T &lt;: Message](topic: String, properties: Properties) = new KafkaCommonClient[T](topic, properties)</span>
+
+  def apply[T &lt;: Message](topic: String, config: Config): KafkaCommonClient[T] = {
+<span class="fc" id="L47">    val properties = new Properties()</span>
+<span class="fc" id="L48">    properties.put(&quot;bootstrap.servers&quot;, config.getStringList(&quot;channel.kafka.brokers&quot;).asScala.mkString(&quot;,&quot;))</span>
+<span class="fc" id="L49">    properties.put(&quot;acks&quot;, &quot;1&quot;)</span>
+<span class="fc" id="L50">    new KafkaCommonClient[T](topic, properties)</span>
+  }
+<span class="fc" id="L52">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

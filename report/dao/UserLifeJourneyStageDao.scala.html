@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserLifeJourneyStageDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">UserLifeJourneyStageDao.scala</span></div><h1>UserLifeJourneyStageDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import javax.inject.{ Inject, Singleton }
+import model.UserLifeJourneyStage
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.lifted.{ Rep, TableQuery, Tag }
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+<span class="nc" id="L13">class UserLifeJourneyStageTable(tag: Tag) extends BaseTable[UserLifeJourneyStage](tag, &quot;user_life_journey_stage&quot;) {</span>
+
+<span class="nc" id="L15">  def journeyId: Rep[Int] = column[Int](&quot;journey_id&quot;)</span>
+
+<span class="nc" id="L17">  def description: Rep[String] = column[String](&quot;description&quot;)</span>
+
+<span class="nc" id="L19">  def name: Rep[String] = column[String](&quot;name&quot;)</span>
+
+<span class="nc" id="L21">  def tagId: Rep[Option[Int]] = column[Option[Int]](&quot;tag_id&quot;)</span>
+
+<span class="nc" id="L23">  def rank: Rep[Int] = column[Int](&quot;rank&quot;)</span>
+
+<span class="nc" id="L25">  override def * = (id.?, projectId, journeyId, description, name, tagId, rank, creatorId, updaterId, state, createdAt, updatedAt) &lt;&gt;</span>
+<span class="nc" id="L26">    ((UserLifeJourneyStage.apply _).tupled, UserLifeJourneyStage.unapply)</span>
+}
+
+@Singleton
+<span class="nc bnc" id="L30" title="All 28 branches missed.">case class UserLifeJourneyStageDao @Inject() (override val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="nc" id="L31">  extends HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="nc" id="L33">  val table = TableQuery[UserLifeJourneyStageTable]</span>
+
+  def insert(m: UserLifeJourneyStage): Future[UserLifeJourneyStage] = {
+<span class="nc" id="L36">    db.run((table returning table.map(_.id) into ((model, id) =&gt; model.withId(id))) += m)</span>
+  }
+
+  def update(userLifeJourneyStage: UserLifeJourneyStage): Future[Int] = {
+<span class="nc" id="L40">    db.run(table.filter(_.id === userLifeJourneyStage.id).update(userLifeJourneyStage))</span>
+  }
+
+  def findByJourneyId(journeyId: Int): Future[List[UserLifeJourneyStage]] = {
+<span class="nc" id="L44">    db.run(table.filter(_.journeyId === journeyId).sortBy(_.updatedAt.desc).result).map(_.toList)</span>
+  }
+
+  def findById(stageId: Int): Future[UserLifeJourneyStage] = {
+<span class="nc" id="L48">    db.run(table.filter(_.id === stageId).result.head)</span>
+  }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

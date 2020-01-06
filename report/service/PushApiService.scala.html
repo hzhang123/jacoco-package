@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushApiService.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">service</a> &gt; <span class="el_source">PushApiService.scala</span></div><h1>PushApiService.scala</h1><pre class="source lang-java linenums">package service
+
+import business.push.{ AppPushMessageHandler, PushJobsHandler }
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ ProductDao, PushApiRequestDao, PushMessageDao, PushRuleDao }
+import dtos.{ ApiErrorResponse, UserInfo }
+import exception.MarketingApiException
+import form.api.APIPushMessageForm
+import handlers.ApiPushTokenConverter
+import infrastructure.lock.LockManager
+import io.growing.marketing.common.model.PushApiRequest
+import io.growing.micros.business.model.{ Product, Project }
+import io.growing.micros.play.exception.GrowingPlayException
+import io.growing.micros.play.mvc.FutureUtils
+import javax.inject.{ Inject, Singleton }
+import model.auth.WrappedRequests
+import model.context.AppMessageContext
+import org.apache.commons.codec.digest.DigestUtils
+import org.postgresql.util.PSQLException
+import play.api.libs.json.{ JsValue, Json }
+import play.api.mvc.Result
+import play.api.mvc.Results.Ok
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.{ Failure, Success }
+
+/**
+ * @author : xhldtc
+ * @since : 2019-09-24
+ */
+@Singleton
+<span class="nc bnc" id="L33" title="All 4 branches missed.">class PushApiService @Inject() (</span>
+<span class="nc" id="L34">  pushApiRequestDao: PushApiRequestDao,</span>
+<span class="nc" id="L35">  pushMessageDao: PushMessageDao,</span>
+<span class="nc" id="L36">  pushRuleDao: PushRuleDao,</span>
+  productDao: ProductDao,
+<span class="nc" id="L38">  pushMessageService: PushMessageService,</span>
+  appPushMessageHandler: AppPushMessageHandler,
+<span class="nc" id="L40">  pushJobsHandler: PushJobsHandler,</span>
+<span class="nc" id="L41">  apiPushTokenConverter: ApiPushTokenConverter,</span>
+<span class="nc" id="L42">  lockManager: LockManager,</span>
+<span class="nc" id="L43">  messageDuplicateService: MessageDuplicateService) extends FutureUtils with LazyLogging {</span>
+
+<span class="nc" id="L45">  def createPushApiMessage(apiPushMessageForm: APIPushMessageForm, request: WrappedRequests.AuthenticationRequest[JsValue],</span>
+    product: Product): Future[Result] = {
+<span class="nc" id="L47">    val md5 = DigestUtils.md5Hex(request.body.toString)</span>
+<span class="nc" id="L48">    val cid = apiPushMessageForm.cid</span>
+<span class="nc" id="L49">    val userId = request.authentication.userId.getOrElse(-1)</span>
+
+<span class="nc" id="L51">    pushApiRequestDao.findExistCidRequest(cid).flatMap {</span>
+      //查表里是否已经有同cid的request,如果有直接拿过来messageId构造推送发出去
+<span class="nc bnc" id="L53" title="All 2 branches missed.">      case Some(existApiRequest) =&gt;</span>
+<span class="nc" id="L54">        val pushApiRequest = PushApiRequest(None, cid, md5, existApiRequest.messageId, apiPushMessageForm.audience)</span>
+<span class="nc" id="L55">        pushApiRequestDao.insert(pushApiRequest).flatMap(dbApiRequest =&gt;</span>
+<span class="nc" id="L56">          publishExistingMessage(userId, request.project, product, existApiRequest.messageId.get, apiPushMessageForm)</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">            .andThen {</span>
+<span class="nc bnc" id="L58" title="All 4 branches missed.">              case Failure(e) =&gt;</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">                logger.error(&quot;publish existing message failed and rollback request record&quot;, e)</span>
+<span class="nc" id="L60">                pushApiRequestDao.deleteById(dbApiRequest.id.get)</span>
+            })
+      //如果表里没有同cid的request,加个分布式锁防止多实例同cid的请求竞争插入第一条记录
+<span class="nc" id="L63">      case _ =&gt; lockManager.acquire(cid).flatMap {</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        case Some(lock) =&gt;</span>
+<span class="nc" id="L65">          publishNewMessage(request.project, product, apiPushMessageForm, md5, userId).transformWith {</span>
+<span class="nc bnc" id="L66" title="All 2 branches missed.">            case Success(value) =&gt; lockManager.release(lock).flatMap(_ =&gt; Future.successful(value))</span>
+<span class="nc bnc" id="L67" title="All 2 branches missed.">            case Failure(ex) =&gt; lockManager.release(lock).flatMap(_ =&gt; Future.failed(ex))</span>
+          }
+<span class="nc" id="L69">        case _ =&gt; Future.successful(ApiErrorResponse.RATE_LIMIT_DENY.forbidden)</span>
+      }
+<span class="nc bnc" id="L71" title="All 2 branches missed.">    }.recover {</span>
+      //主键冲突异常，可能发生于调查方多次使用相同参数重试请求
+<span class="nc bnc" id="L73" title="All 16 branches missed.">      case e: PSQLException if e.getSQLState == &quot;23505&quot; =&gt;</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        logger.error(s&quot;failed to insert request: ${request.body.toString}&quot;, e)</span>
+<span class="nc" id="L75">        ApiErrorResponse.DUPLICATE_REQUEST.badRequest</span>
+<span class="nc bnc" id="L76" title="All 4 branches missed.">      case e: MarketingApiException =&gt;</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">        logger.error(s&quot;marketing exception for request: ${request.body.toString}&quot;, e)</span>
+<span class="nc" id="L78">        ApiErrorResponse(e).badRequest</span>
+      //透传创建message时抛出的自定义异常信息
+<span class="nc bnc" id="L80" title="All 4 branches missed.">      case e: GrowingPlayException =&gt;</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        logger.error(s&quot;gio exception for request: ${request.body.toString}&quot;, e)</span>
+<span class="nc" id="L82">        ApiErrorResponse.customBadRequest(e.errorMsg.message)</span>
+      //其他未知异常
+<span class="nc bnc" id="L84" title="All 4 branches missed.">      case e: Throwable =&gt;</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">        logger.error(s&quot;unexpected exception for request: ${request.body.toString}&quot;, e)</span>
+<span class="nc" id="L86">        ApiErrorResponse.INTERNAL_SERVER_ERROR.internalServerError</span>
+    }
+  }
+
+  private[this] def publishNewMessage(project: Project, product: Product, apiPushMessageForm: APIPushMessageForm, md5: String, userId: Int): Future[Result] = {
+<span class="nc" id="L91">    val pushMessageForm = apiPushMessageForm.convertToPushMessageForm(product)</span>
+    val filterUsers = for {
+      // todo: 暂时只支持 cs 属性
+<span class="nc" id="L94">      userInfos &lt;- apiPushTokenConverter.convertCs1ToPushTokens(project.keyid, &quot;csk&quot;, apiPushMessageForm.audience)</span>
+<span class="nc" id="L95">      validUsers &lt;- messageDuplicateService.filterUserInfo(userInfos, apiPushMessageForm.cid)</span>
+<span class="nc" id="L96">    } yield validUsers</span>
+
+<span class="nc" id="L98">    filterUsers.flatMap {</span>
+<span class="nc bnc" id="L99" title="All 4 branches missed.">      case list: List[UserInfo] if list.isEmpty =&gt; Future.successful(ApiErrorResponse.EMPTY_AUDIENCE.badRequest)</span>
+<span class="nc" id="L100">      case validUserInfo =&gt; pushMessageService.create(pushMessageForm, project, userId, validUserInfo, apiPushMessageForm.options.apnsProduction)</span>
+<span class="nc" id="L101">        .flatMap(dto =&gt; pushApiRequestDao.insert(PushApiRequest(None, apiPushMessageForm.cid, md5, dto.message.id, apiPushMessageForm.audience)))</span>
+<span class="nc" id="L102">        .map { _ =&gt; Ok(Json.obj(&quot;cid&quot; -&gt; apiPushMessageForm.cid)) }</span>
+    }
+  }
+
+  private[this] def publishExistingMessage(userId: Int, project: Project, product: Product, messageId: Int,
+    apiPushMessageForm: APIPushMessageForm): Future[Result] = {
+    val beans = for {
+      // todo: 暂时只支持 cs 属性
+<span class="nc" id="L110">      userInfos &lt;- apiPushTokenConverter.convertCs1ToPushTokens(project.keyid, &quot;csk&quot;, apiPushMessageForm.audience)</span>
+<span class="nc" id="L111">      filterInfos &lt;- messageDuplicateService.filterUserInfo(userInfos, apiPushMessageForm.cid)</span>
+<span class="nc" id="L112">      pushMessage &lt;- pushMessageDao.findByMsgId(messageId)</span>
+<span class="nc" id="L113">      pushRule &lt;- pushRuleDao.findByMessageId(messageId).map(_.headOption)</span>
+<span class="nc" id="L114">    } yield (userInfos, filterInfos, pushMessage, pushRule)</span>
+
+<span class="nc bnc" id="L116" title="All 8 branches missed.">    beans.flatMap {</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">      case (userInfos, _, _, _) if userInfos.isEmpty =&gt; Future.failed(MarketingApiException(ApiErrorResponse.EMPTY_AUDIENCE))</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">      case (_, filterInfos, _, _) if filterInfos.isEmpty =&gt; Future.failed(MarketingApiException(ApiErrorResponse.DUPLICATE_AUDIENCE))</span>
+<span class="nc bnc" id="L119" title="All 2 branches missed.">      case (_, _, _, pushRule) if pushRule.isEmpty =&gt; Future.failed(MarketingApiException(ApiErrorResponse.PUSH_API_UNEXPECT_ERROR))</span>
+<span class="nc" id="L120">      case (_, filterInfos, pushMessage, pushRule) =&gt;</span>
+<span class="nc" id="L121">        val pushMessageForm = apiPushMessageForm.convertToPushMessageForm(product)</span>
+<span class="nc" id="L122">        val context = AppMessageContext(userId, project, pushMessageForm)</span>
+<span class="nc" id="L123">          .copy(</span>
+<span class="nc" id="L124">            message = Some(pushMessage),</span>
+<span class="nc" id="L125">            rules = pushRule.map(List(_)),</span>
+<span class="nc" id="L126">            users = filterInfos,</span>
+<span class="nc" id="L127">            apnsProd = apiPushMessageForm.options.apnsProduction)</span>
+<span class="nc" id="L128">        pushJobsHandler.publishPushJob(context)</span>
+<span class="nc" id="L129">          .map(_ =&gt; Ok(Json.obj(&quot;cid&quot; -&gt; apiPushMessageForm.cid)))</span>
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

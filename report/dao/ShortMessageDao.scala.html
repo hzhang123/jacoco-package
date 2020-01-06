@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShortMessageDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">ShortMessageDao.scala</span></div><h1>ShortMessageDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import io.growing.marketing.common.model.AudienceType.AudienceType
+import io.growing.marketing.common.model.{ ShortMessage, SmsProvider }
+import io.growing.marketing.common.model.SmsProvider.SmsProvider
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import io.growing.micros.utils.time.DateTimeUtil.UTCNow
+import javax.inject.Inject
+import org.joda.time.DateTime
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.lifted.{ ProvenShape, Rep, Tag }
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+<span class="fc" id="L18">class ShortMessageTable(tag: Tag) extends BaseTable[ShortMessage](tag, &quot;short_messages&quot;) {</span>
+
+<span class="fc" id="L20">  implicit val SmsProviderE = MappedColumnType.base[SmsProvider, String](</span>
+<span class="pc" id="L21">    l =&gt; l.toString,</span>
+<span class="pc" id="L22">    r =&gt; SmsProvider.withName(r))</span>
+
+<span class="fc" id="L24">  def name: Rep[String] = column[String](&quot;name&quot;)</span>
+
+<span class="fc" id="L26">  def projectKeyid: Rep[String] = column[String](&quot;project_keyid&quot;)</span>
+
+<span class="fc" id="L28">  def configId: Rep[Int] = column[Int](&quot;config_id&quot;)</span>
+
+<span class="fc" id="L30">  def audienceType: Rep[Option[AudienceType]] = column[Option[AudienceType]](&quot;audience_type&quot;)</span>
+
+<span class="fc" id="L32">  def audienceId: Rep[Option[String]] = column[Option[String]](&quot;audience_id&quot;)</span>
+
+<span class="fc" id="L34">  def signName: Rep[Option[String]] = column[Option[String]](&quot;sign_name&quot;)</span>
+
+<span class="fc" id="L36">  def templateCode: Rep[Option[String]] = column[Option[String]](&quot;template_code&quot;)</span>
+
+<span class="fc" id="L38">  def templateContent: Rep[Option[String]] = column[Option[String]](&quot;template_content&quot;)</span>
+
+<span class="fc" id="L40">  def templateParams: Rep[List[String]] = column[List[String]](&quot;template_params&quot;)</span>
+
+<span class="fc" id="L42">  def segAttrs: Rep[List[String]] = column[List[String]](&quot;seg_attrs&quot;)</span>
+
+<span class="fc" id="L44">  def testValues: Rep[List[String]] = column[List[String]](&quot;test_values&quot;)</span>
+
+<span class="fc" id="L46">  def testPhoneNum: Rep[Option[String]] = column[Option[String]](&quot;test_num&quot;)</span>
+
+<span class="fc" id="L48">  def startAt: Rep[DateTime] = column[DateTime](&quot;start_at&quot;)</span>
+
+<span class="fc" id="L50">  def sendResult: Rep[Option[String]] = column[Option[String]](&quot;send_result&quot;)</span>
+
+<span class="fc" id="L52">  def smsProvider: Rep[SmsProvider] = column[SmsProvider](&quot;sms_provider&quot;)</span>
+
+<span class="fc" id="L54">  override def * : ProvenShape[ShortMessage] = (id.?, projectId, projectKeyid, creatorId, updaterId, name, configId, audienceType,</span>
+<span class="fc" id="L55">    audienceId, state, signName, templateCode, templateContent, templateParams, segAttrs, testValues, testPhoneNum, startAt, sendResult, smsProvider, createdAt, updatedAt) &lt;&gt;</span>
+<span class="pc" id="L56">    ((ShortMessage.apply _).tupled, ShortMessage.unapply)</span>
+}
+
+<span class="fc" id="L59">class ShortMessageDao @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="fc" id="L60">  extends BaseDao[ShortMessageTable, ShortMessage] with HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="fc" id="L62">  override val table = TableQuery[ShortMessageTable]</span>
+
+<span class="nc bnc" id="L64" title="All 4 branches missed.">  override lazy val insertQuery = table returning table.map(_.id) into ((ShortMsg, id) =&gt; ShortMsg.withId(id))</span>
+
+<span class="nc" id="L66">  override def insert(model: ShortMessage): Future[ShortMessage] = super.insert(model)</span>
+
+  def updateShortMessage(shortMsgId: Int, model: ShortMessage): Future[Int] = {
+<span class="nc" id="L69">    db.run(table.filter(m =&gt; m.id === shortMsgId).update(model))</span>
+  }
+
+  def findByShortMessageId(shortMsgId: Int): Future[Option[ShortMessage]] = {
+<span class="nc" id="L73">    db.run(table.filter(m =&gt; m.id === shortMsgId &amp;&amp; m.state =!= Status.archived).result).map(_.toList.headOption)</span>
+  }
+
+  def findByProjectId(projectId: Int): Future[Seq[ShortMessage]] = {
+<span class="nc" id="L77">    db.run(table.filter(m =&gt; m.projectId === projectId &amp;&amp; m.state =!= Status.archived).sortBy(_.updatedAt.desc).result)</span>
+  }
+
+  def deleteShortMessage(shortMsgId: Int): Future[Int] = {
+<span class="nc" id="L81">    db.run(table.filter(m =&gt; m.id === shortMsgId).map(_.state).update(Status.archived))</span>
+  }
+
+  def findPlanningShortMessages(): Future[Seq[ShortMessage]] = {
+<span class="fc" id="L85">    db.run(table.filter(m =&gt; m.startAt &lt;= UTCNow &amp;&amp; m.state === Status.planning).result)</span>
+  }
+
+  def findByName(name: String, projectId: Int): Future[Option[ShortMessage]] = {
+<span class="nc" id="L89">    db.run(table.filter(m =&gt; m.name === name &amp;&amp; m.projectId === projectId &amp;&amp; m.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findByNameInOthers(name: String, projectId: Int, id: Int): Future[Option[ShortMessage]] = {
+<span class="nc" id="L93">    db.run(table.filter(m =&gt; m.id =!= id &amp;&amp; m.projectId === projectId &amp;&amp; m.name === name &amp;&amp; m.state =!= Status.archived).result.headOption)</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

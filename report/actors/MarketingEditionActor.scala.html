@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MarketingEditionActor.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">actors</a> &gt; <span class="el_source">MarketingEditionActor.scala</span></div><h1>MarketingEditionActor.scala</h1><pre class="source lang-java linenums">package actors
+
+import actors.job.AbstractTimerActor
+import actors.job.PushMessageScheduleDailyActor.OnTime
+import actors.job.PushResultListenerActor.ResultListenerTickKey
+import com.google.inject.Inject
+import com.google.common.base.Throwables
+import akka.actor.SupervisorStrategy.Resume
+import com.typesafe.scalalogging.LazyLogging
+import akka.actor.{Actor, OneForOneStrategy, Props, SupervisorStrategy}
+import io.growing.marketing.common.model.{EditionStatus, MarketingEdition}
+import infrastructure.lock.EmptyLockManagerImpl
+
+import scala.concurrent.Future
+
+
+<span class="pc bpc" id="L17" title="1 of 4 branches missed.">class MarketingEditionActor @Inject() (</span>
+<span class="fc" id="L18">	injector: Injector,</span>
+<span class="fc" id="L19">) extends AbstractTimerActor with LazyLogging {</span>
+	import MarketingEditionActor._
+	import context.dispatcher
+<span class="fc" id="L22">	override val lockManager = new EmptyLockManagerImpl()</span>
+<span class="fc" id="L23">	override val TimerKey: Any = ResultListenerTickKey</span>
+<span class="fc" id="L24">	val delayMillis: Int = 600</span>
+<span class="fc" id="L25">	val intervalSeconds: Int = 60 * 10</span>
+<span class="pc bpc" id="L26" title="1 of 2 branches missed.">	override val supervisorStrategy: SupervisorStrategy = OneForOneStrategy() {</span>
+<span class="nc bnc" id="L27" title="All 4 branches missed.">		case e: Exception =&gt;</span>
+<span class="nc bnc" id="L28" title="All 2 branches missed.">			logger.error(Throwables.getStackTraceAsString(e))</span>
+<span class="nc" id="L29">			Resume</span>
+	}
+<span class="fc" id="L31">	override def initJob(): Unit = {</span>
+	}
+	override def tickJob(): Future[Any] = {
+		for {
+<span class="fc" id="L35">			editions &lt;- injector.marketingEditionDao.findExpiredTrail</span>
+<span class="pc" id="L36">			_ ← injector.marketingEditionDao.update(editions.map(e ⇒ e.copy(status = Some(EditionStatus.Expired))))</span>
+<span class="fc" id="L37">		} yield 1</span>
+	}
+
+}
+
+<span class="nc" id="L42">object MarketingEditionActor {</span>
+<span class="pc" id="L43">	private case object ResultListenerTickKey</span>
+<span class="pc" id="L44">	def props(injector: Injector): Props = Props[MarketingEditionActor](new MarketingEditionActor(injector))</span>
+<span class="nc" id="L45">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbTestHandlerImpl.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">handlers.impl</a> &gt; <span class="el_source">AbTestHandlerImpl.scala</span></div><h1>AbTestHandlerImpl.scala</h1><pre class="source lang-java linenums">package handlers.impl
+
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ AbTestDao, AbTestMessageDao, AbTestRuleDao }
+import form.{ AbTestForm, AbTestMessageForm }
+import handlers.{ AbTestHandler, PushMessageHandler }
+import infrastructure.measurement.MessageMeasurementHandler
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.{ Product, Project, Status }
+import io.growing.micros.play.mvc.FutureUtils
+import io.growing.micros.utils.time.DateTimeUtil.UTCNow
+import javax.inject.{ Inject, Singleton }
+import org.joda.time.{ DateTime, DateTimeZone }
+import service.ProductService
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+@Singleton
+<span class="pc bnc" id="L20" title="All 4 branches missed.">class AbTestHandlerImpl @Inject() (</span>
+  productService: ProductService,
+<span class="fc" id="L22">  pushMetricsHandler: MessageMeasurementHandler,</span>
+<span class="fc" id="L23">  pushMessageHandler: PushMessageHandler,</span>
+<span class="fc" id="L24">  abTestDao: AbTestDao,</span>
+<span class="fc" id="L25">  abTestMessageDao: AbTestMessageDao,</span>
+<span class="fc" id="L26">  abTestRuleDao: AbTestRuleDao) extends AbTestHandler with FutureUtils with LazyLogging {</span>
+
+  override def buildRulesFromForm(form: AbTestMessageForm, products: Seq[Product], message: AbTestMessage): Seq[PushRule] = {
+<span class="nc bnc" id="L29" title="All 2 branches missed.">    val activatedAtMills = if (form.isActivate) Option(UTCNow.getMillis) else None</span>
+<span class="nc" id="L30">    form.rule match {</span>
+<span class="nc bnc" id="L31" title="All 2 branches missed.">      case None ⇒ Seq.empty</span>
+<span class="nc bnc" id="L32" title="All 2 branches missed.">      case Some(ruleForm) ⇒</span>
+<span class="nc" id="L33">        products match {</span>
+<span class="nc bnc" id="L34" title="All 6 branches missed.">          case Seq() =&gt; Seq(ruleForm.copy(activatedAt = activatedAtMills).buildFromAbTestMsg(message))</span>
+<span class="nc" id="L35">          case _ =&gt; products.map { product =&gt;</span>
+<span class="nc" id="L36">            val maybeTarget = pushMessageHandler.buildRuleTargetFromContentTarget(form.getPushContentTarget)</span>
+<span class="nc" id="L37">            ruleForm.copy(activatedAt = activatedAtMills).buildFromAbTestMsg(message, Some(product), maybeTarget)</span>
+          }
+        }
+    }
+  }
+
+  override def createAbTest(abTestForm: AbTestForm, project: Project, userId: Int, msgIds: List[Int]): Future[AbTest] = {
+<span class="nc" id="L44">    val abTest = abTestForm.buildAbTest(project, userId, userId, msgIds, msgIds)</span>
+<span class="nc" id="L45">    abTestDao.insert(abTest).map { r =&gt;</span>
+<span class="nc" id="L46">      val d = &quot;vstr_gio_ma_abtest_&quot; + r.id.getOrElse(-1)</span>
+<span class="nc" id="L47">      val newAbTest = r.copy(abDimension = Some(d))</span>
+      //abTestMessageDao.updateDimension(msgIds, d)
+<span class="nc" id="L49">      abTestDao.update(newAbTest, newAbTest.id.get)</span>
+<span class="nc" id="L50">      newAbTest</span>
+    }
+  }
+
+  override def createAbTestMessage(form: AbTestMessageForm, project: Project, userId: Int, name: String): Future[AbTestMessage] = {
+<span class="nc" id="L55">    val filter = pushMessageHandler.convertFormToFilter(form.audienceFilter)</span>
+<span class="nc" id="L56">    val m = form.buildMessage(project.dbid, None, userId, userId, filter, name)</span>
+<span class="nc" id="L57">    abTestMessageDao.insert(m)</span>
+  }
+
+  override def updateAbTest(form: AbTestForm, abTest: AbTest, abTestId: Int, project: Project, userId: Int,
+    historyMsgs: List[Int], latestMsgIds: List[Int]): AbTest = {
+
+<span class="nc" id="L63">    val newAbTest = abTest.copy(</span>
+<span class="nc" id="L64">      updaterId = userId,</span>
+<span class="nc" id="L65">      state = form.state,</span>
+<span class="nc" id="L66">      name = form.name,</span>
+<span class="nc" id="L67">      messages = abTest.messages ::: historyMsgs,</span>
+<span class="nc" id="L68">      latestMessages = latestMsgIds,</span>
+<span class="nc" id="L69">      updatedAt = UTCNow)</span>
+<span class="nc" id="L70">    abTestDao.update(newAbTest, abTestId)</span>
+<span class="nc" id="L71">    newAbTest</span>
+  }
+
+<span class="nc" id="L74">  override def updateAbTestMessage(message: AbTestMessage, form: AbTestMessageForm, userId: Int, url: Option[String] = None): AbTestMessage = {</span>
+<span class="nc" id="L75">    val filter = pushMessageHandler.convertFormToFilter(form.audienceFilter)</span>
+<span class="nc" id="L76">    val m = form.metric match {</span>
+<span class="nc bnc" id="L77" title="All 2 branches missed.">      case Some(v) =&gt; Some(v.build)</span>
+<span class="nc" id="L78">      case _ =&gt; None</span>
+    }
+<span class="nc" id="L80">    message.copy(</span>
+<span class="nc" id="L81">      updaterId = userId,</span>
+<span class="nc" id="L82">      audienceType = form.audienceType,</span>
+<span class="nc" id="L83">      audienceId = form.audienceId,</span>
+<span class="nc" id="L84">      audienceFilter = filter,</span>
+<span class="nc" id="L85">      state = form.state.get,</span>
+<span class="nc" id="L86">      symbol = form.symbol,</span>
+<span class="nc" id="L87">      rate = form.rate,</span>
+<span class="nc" id="L88">      contentUrl = url,</span>
+<span class="nc" id="L89">      contentMetadata = form.content,</span>
+<span class="nc" id="L90">      ctrlGroup = form.ctrlGroup,</span>
+<span class="nc" id="L91">      abMetric = m,</span>
+<span class="nc" id="L92">      totalActivatedTimes = form.totalActivatedTimes,</span>
+<span class="nc" id="L93">      updatedAt = UTCNow)</span>
+  }
+
+  override def createMetricsIfNecessary(project: Project, userId: Int): Future[PushMetrics] = {
+<span class="nc" id="L97">    pushMetricsHandler.createMetricsIfNecessary(MessageType.abTest, project, userId)</span>
+  }
+
+  def copyMsgAndRuleIfNecessary(form: AbTestForm, abTest: AbTest, abTestMessages: Seq[AbTestMessage]): Future[Seq[AbTestMessage]] = {
+<span class="nc bnc" id="L101" title="All 12 branches missed.">    if (abTest.state == Status.activated &amp;&amp; form.state == Status.stop) {</span>
+<span class="nc" id="L102">      copyAbTestMessageAndRule(abTestMessages)</span>
+    } else {
+<span class="nc" id="L104">      Future.successful(abTestMessages)</span>
+    }
+  }
+
+  private def copyAbTestMessageAndRule(abTestMessages: Seq[AbTestMessage]) = {
+<span class="fc" id="L109">    val newMessages = abTestMessages.map { m =&gt;</span>
+<span class="nc" id="L110">      val newAbTestVersion = m.abTestVersion + 1</span>
+<span class="nc" id="L111">      m.state match {</span>
+<span class="nc bnc" id="L112" title="All 6 branches missed.">        case Status.activated =&gt;</span>
+<span class="nc" id="L113">          abTestMessageDao.update(m.copy(state = Status.stop), m.dbid)</span>
+<span class="nc" id="L114">          m.copy(state = Status.draft, abTestVersion = newAbTestVersion)</span>
+<span class="nc bnc" id="L115" title="All 14 branches missed.">        case Status.archived | Status.deleted =&gt;</span>
+<span class="nc" id="L116">          abTestMessageDao.update(m.copy(state = Status.deleted), m.dbid)</span>
+<span class="nc" id="L117">          m.copy(state = Status.deleted, abTestVersion = newAbTestVersion)</span>
+<span class="nc bnc" id="L118" title="All 6 branches missed.">        case Status.planning =&gt;</span>
+<span class="nc" id="L119">          abTestMessageDao.update(m.copy(state = Status.stop), m.dbid)</span>
+<span class="nc" id="L120">          m</span>
+      }
+<span class="pc" id="L122">    }.map(abTestMessageDao.insert)</span>
+<span class="fc" id="L123">    val result = Future.sequence(newMessages)</span>
+    for {
+<span class="fc" id="L125">      r &lt;- result</span>
+<span class="pc bpc" id="L126" title="1 of 2 branches missed.">      oldRules &lt;- abTestRuleDao.findByMessageIds(abTestMessages.map(_.dbid))</span>
+<span class="pc" id="L127">      m = r.groupBy(_.dbid).values.toSeq</span>
+<span class="pc" id="L128">      n = oldRules.groupBy(_.messageId).values.toSeq</span>
+<span class="fc" id="L129">      aux = n.flatMap { x =&gt;</span>
+<span class="nc" id="L130">        val temp = m(n.indexOf(x))</span>
+<span class="nc" id="L131">        x.zipAll(temp, x.head, temp.head)</span>
+      }
+<span class="fc" id="L133">      _ &lt;- updateAbTestRuleToStop(oldRules)</span>
+<span class="fc" id="L134">      _ &lt;- copyAbTestRules(aux)</span>
+<span class="fc" id="L135">    } yield r</span>
+  }
+
+  private def updateAbTestRuleToStop(rules: Seq[PushRule]) = {
+<span class="pc" id="L139">    abTestRuleDao.stopRules(rules.map(_.dbid))</span>
+  }
+
+  private def copyAbTestRules(pairs: Seq[(PushRule, AbTestMessage)]) = {
+<span class="fc" id="L143">    val rules = pairs.map { p =&gt;</span>
+<span class="nc" id="L144">      p._1.copy(</span>
+<span class="nc" id="L145">        messageId = p._2.dbid,</span>
+<span class="nc" id="L146">        state = p._2.state,</span>
+<span class="nc" id="L147">        startAt = new DateTime(p._1.activateAt.getOrElse(UTCNow)).withZone(DateTimeZone.UTC),</span>
+<span class="nc" id="L148">        endAt = UTCNow)</span>
+    }
+<span class="fc" id="L150">    abTestRuleDao.insert(rules)</span>
+  }
+
+  def updateExpireAbTestMessages(ids: Seq[Int]): Future[AnyRef] = {
+    for {
+<span class="fc" id="L155">      abTestMessages &lt;- abTestMessageDao.findByIds(ids)</span>
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">      newAbTestMessages &lt;- copyAbTestMessageAndRule(abTestMessages)</span>
+<span class="pc" id="L157">      r = newAbTestMessages.groupBy(_.dimension).values.map { m =&gt;</span>
+<span class="nc" id="L158">        abTestDao.updateExpiredAbTest(m.map(_.dbid))</span>
+      }
+<span class="fc" id="L160">    } yield r</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

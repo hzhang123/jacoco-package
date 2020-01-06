@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageCampaignService.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">service</a> &gt; <span class="el_source">MessageCampaignService.scala</span></div><h1>MessageCampaignService.scala</h1><pre class="source lang-java linenums">package service
+
+import actors.protocol.{ MessageOnline, Operation }
+import akka.actor.ActorRef
+import com.google.inject.name.Named
+import javax.inject.{ Inject, Singleton }
+import dtos.{ FlushCacheMessage, MessageCampaignDto }
+import form.MessageCampaignForm
+
+import scala.concurrent.Future
+import presenters.MessageCampaignPresenter
+import io.growing.micros.business.model.{ Project, Status }
+import dao._
+import io.growing.marketing.common.model.{ MessageCampaign, PushMessage, PushRule, Sequencing }
+import io.growing.micros.play.exception.{ BadRequestException, NotFoundException }
+import io.growing.micros.play.mvc.FutureUtils
+import infrastructure.lock.MessageCacheManager
+import play.api.libs.json.Json
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+/**
+ * MessageCampaignService
+ *
+ * @author damon lin
+ *         2019/8/21
+ */
+@Singleton
+<span class="nc" id="L29">class MessageCampaignService @Inject() (</span>
+<span class="nc" id="L30">  pushMessageService: PushMessageService,</span>
+<span class="nc" id="L31">  messageCampaignDao: MessageCampaignDao,</span>
+<span class="nc" id="L32">  messageCacheManager: MessageCacheManager,</span>
+<span class="nc" id="L33">  pushRuleDao: PushRuleDao,</span>
+<span class="nc" id="L34">  productDao: ProductDao,</span>
+<span class="nc" id="L35">  onlineRuleDao: OnlineRuleDao,</span>
+<span class="nc" id="L36">  onlineMessageDao: OnlineMessageDao,</span>
+<span class="nc" id="L37">  pushMessageDao: PushMessageDao) extends FutureUtils {</span>
+
+<span class="nc" id="L39">  private val FLUSH_ONLINE_MESSAGE_CACHE = &quot;FLUSH_ONLINE_MESSAGE_CACHE&quot;</span>
+
+  def findByProject(projectId: Int): Future[List[MessageCampaignDto]] = {
+<span class="nc" id="L42">    messageCampaignDao.findByProject(projectId).flatMap { campaigns =&gt;</span>
+<span class="nc" id="L43">      Future.traverse(campaigns) { campaign =&gt;</span>
+<span class="nc" id="L44">        Future.successful(MessageCampaignDto(campaign))</span>
+      }
+    }
+  }
+
+  def findDetail(projectId: Int, campaignId: Int): Future[Option[MessageCampaignPresenter]] = {
+    for {
+<span class="nc" id="L51">      maybeCampaign &lt;- messageCampaignDao.findById(projectId, campaignId)</span>
+<span class="nc" id="L52">      messages &lt;- pushMessageService.findByMessageIds(projectId, maybeCampaign.map(_.sequencing.map(_.messageId)).getOrElse(List()))</span>
+    } yield {
+      // 取 message 列表和 Sequencing 的交集
+<span class="nc" id="L55">      val newSeq = maybeCampaign.map(_.sequencing.filter(s =&gt; messages.map(_.message.dbid).contains(s.messageId))).getOrElse(List())</span>
+<span class="nc" id="L56">      maybeCampaign.map(c =&gt; MessageCampaignPresenter(c.copy(sequencing = newSeq), messages.map(m =&gt; m.joinSeq(newSeq))))</span>
+    }
+  }
+
+  def create(messageCampaignForm: MessageCampaignForm, project: Project, userId: Int): Future[MessageCampaignDto] = {
+    for {
+<span class="nc bnc" id="L62" title="All 2 branches missed.">      _ &lt;- findDuplicatedName(messageCampaignForm.name, project.dbid)</span>
+<span class="nc" id="L63">      campaign = messageCampaignForm.toMessCampaign(project, userId, userId)</span>
+<span class="nc" id="L64">      isProductsValid &lt;- checkProductList(campaign)</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">      _ &lt;- failCondition(!isProductsValid, BadRequestException(s&quot;产品列表内存在非法产品！&quot;))</span>
+<span class="nc" id="L66">      r &lt;- messageCampaignDao.insert(campaign)</span>
+<span class="nc" id="L67">    } yield MessageCampaignDto(r)</span>
+  }
+
+  def update(f: MessageCampaignForm, campaignId: Int, project: Project, userId: Int): Future[MessageCampaignDto] = {
+    for {
+<span class="nc" id="L72">      _ &lt;- findDuplicatedName(f.name, project.dbid, Some(campaignId))</span>
+<span class="nc" id="L73">      maybeCampaign &lt;- messageCampaignDao.findById(project.dbid, campaignId)</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">      _ ← failCondition(maybeCampaign.isEmpty, NotFoundException(&quot;资源位不存在&quot;))</span>
+<span class="nc" id="L75">      campaign = f.toMessCampaign(project, userId, userId)</span>
+<span class="nc" id="L76">      isProductsValid &lt;- checkProductList(campaign)</span>
+<span class="nc bnc" id="L77" title="All 4 branches missed.">      _ &lt;- failCondition(!isProductsValid, BadRequestException(s&quot;产品列表内存在非法产品！&quot;))</span>
+<span class="nc" id="L78">      oldCampaign = maybeCampaign.get</span>
+<span class="nc" id="L79">      newCampaign = campaign.copy(id = oldCampaign.id, creatorId = oldCampaign.creatorId, key = oldCampaign.key, createdAt = oldCampaign.createdAt)</span>
+<span class="nc" id="L80">      _ &lt;- messageCampaignDao.update(project.dbid, campaignId, newCampaign)</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">      _ &lt;- if (f.isActivated) syncOnlineMessages(project.dbid, campaignId, userId) else Future.successful(Unit)</span>
+<span class="nc" id="L82">    } yield MessageCampaignDto(newCampaign)</span>
+  }
+
+  def reset(projectId: Int, campaignId: Int, userId: Int): Future[Option[MessageCampaignPresenter]] = {
+    for {
+<span class="nc" id="L87">      _ &lt;- resetDraftMessages(projectId, campaignId, userId)</span>
+<span class="nc" id="L88">      campaignPresenter &lt;- findDetail(projectId, campaignId)</span>
+<span class="nc" id="L89">    } yield campaignPresenter</span>
+  }
+
+  def archive(projectId: Int, campaignId: Int, userId: Int): Future[Int] = {
+    for {
+<span class="nc" id="L94">      _ &lt;- messageCampaignDao.deleteById(projectId, campaignId)</span>
+<span class="nc" id="L95">      messageIds &lt;- pushMessageService.findByCampaign(projectId, campaignId).map(_.map(_.message.dbid))</span>
+<span class="nc" id="L96">      _ &lt;- onlineMessageDao.batchArchived(projectId, messageIds, userId)</span>
+<span class="nc" id="L97">      count &lt;- pushMessageDao.batchArchived(projectId, messageIds, userId)</span>
+<span class="nc" id="L98">      _ &lt;- pushRuleDao.deleteByMessageIds(messageIds)</span>
+<span class="nc" id="L99">      _ &lt;- onlineRuleDao.deleteByMessageIds(messageIds)</span>
+<span class="nc" id="L100">    } yield count</span>
+  }
+
+  def countOnline(projectId: Int): Future[Int] = {
+<span class="nc" id="L104">    messageCampaignDao.count(projectId)</span>
+  }
+
+<span class="nc" id="L107">  private def findDuplicatedName(name: String, projectId: Int, other: Option[Int] = None): Future[Unit] = {</span>
+<span class="nc" id="L108">    messageCampaignDao.findByName(projectId, name, other).flatMap { msgOpt =&gt;</span>
+<span class="nc" id="L109">      failCondition(msgOpt.nonEmpty, BadRequestException(s&quot;$name 已存在,请更换名字&quot;))</span>
+    }
+  }
+
+  // 所有编辑操作都先落库到线下库 点击上线后同步消息和规则到线上库
+  // fixme: real time dimension ref cnt 加一
+  private def syncOnlineMessages(projectId: Int, campaignId: Int, userId: Int): Future[Seq[PushMessage]] = {
+    for {
+<span class="nc" id="L117">      messages &lt;- pushMessageDao.findByCampaign(projectId, campaignId)</span>
+<span class="nc" id="L118">      rules &lt;- pushRuleDao.findByMessageIds(messages.map(_.dbid))</span>
+<span class="nc" id="L119">      oldMessageIds &lt;- onlineMessageDao.findByCampaign(projectId, campaignId).map(_.map(_.dbid))</span>
+<span class="nc" id="L120">      _ &lt;- onlineMessageDao.batchDelete(projectId, oldMessageIds, userId)</span>
+<span class="nc" id="L121">      _ &lt;- onlineRuleDao.deleteByMessageIds(oldMessageIds)</span>
+<span class="nc" id="L122">      _ &lt;- onlineMessageDao.batchForceInsert(updateMessageState(messages, rules))</span>
+<span class="nc" id="L123">      _ &lt;- onlineRuleDao.insert(rules.map(_.copy(state = Status.activated)))</span>
+<span class="nc" id="L124">      _ &lt;- reloadCache(messages, rules)</span>
+    } yield {
+<span class="nc" id="L126">      val targets = messages.map(_.dbid).filterNot(oldMessageIds.contains)</span>
+<span class="nc" id="L127">      messages</span>
+    }
+  }
+
+  // 所有编辑操作都先落库到线下库 点击取消保存后从线上库同步消息和规则到线下库
+  // todo: reset 操作不包含 campaign 里的 sequencing 字段
+  private def resetDraftMessages(projectId: Int, campaignId: Int, userId: Int): Future[Seq[PushMessage]] = {
+    for {
+<span class="nc" id="L135">      onlineMessages &lt;- onlineMessageDao.findByCampaign(projectId, campaignId)</span>
+<span class="nc" id="L136">      onlineRules &lt;- onlineRuleDao.findByMessageIds(onlineMessages.map(_.dbid))</span>
+<span class="nc" id="L137">      oldMessageIds &lt;- pushMessageDao.findByCampaign(projectId, campaignId).map(_.map(_.dbid))</span>
+<span class="nc" id="L138">      _ &lt;- pushMessageDao.deleteByCampaign(projectId, campaignId)</span>
+<span class="nc" id="L139">      _ &lt;- pushMessageDao.batchForceInsert(updateMessageToDraft(onlineMessages))</span>
+<span class="nc" id="L140">      _ &lt;- pushRuleDao.deleteByMessageIds(oldMessageIds)</span>
+<span class="nc" id="L141">      _ &lt;- pushRuleDao.insert(onlineRules.map(_.copy(state = Status.draft)))</span>
+<span class="nc" id="L142">    } yield onlineMessages</span>
+  }
+
+  private def checkProductList(campaign: MessageCampaign): Future[Boolean] = {
+<span class="nc bnc" id="L146" title="All 2 branches missed.">    productDao.findByIds(campaign.projectId, campaign.productIds).map(_.size == campaign.productIds.size)</span>
+  }
+
+  private def updateMessageState(messages: Seq[PushMessage], rules: Seq[PushRule]): Seq[PushMessage] = {
+<span class="nc" id="L150">    messages.map { m =&gt;</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">      val maybeRule = rules.find(_.messageId == m.dbid)</span>
+<span class="nc bnc" id="L152" title="All 4 branches missed.">      if (maybeRule.isDefined &amp;&amp; maybeRule.get.isPlanning) {</span>
+<span class="nc" id="L153">        m.copy(state = Status.planning)</span>
+<span class="nc bnc" id="L154" title="All 6 branches missed.">      } else if (m.state == Status.draft) {</span>
+<span class="nc" id="L155">        m.copy(state = Status.activated)</span>
+      } else {
+<span class="nc" id="L157">        m</span>
+      }
+    }
+  }
+
+  private def updateMessageToDraft(messages: Seq[PushMessage]): Seq[PushMessage] = {
+<span class="nc bnc" id="L163" title="All 6 branches missed.">    messages.map(m =&gt; if (m.state == Status.activated) m.copy(state = Status.draft) else m)</span>
+  }
+
+  private def reloadCache(messages: Seq[PushMessage], rules: List[PushRule]): Future[Seq[Boolean]] = {
+<span class="nc" id="L167">    val maybeMessage = messages.headOption.map(_.ai).map(ai =&gt; Json.toJson(FlushCacheMessage(ai, rules.map(_.urlScheme).filterNot(_.isEmpty))).toString())</span>
+<span class="nc" id="L168">    Future.traverse(maybeMessage.toSeq) { msg =&gt;</span>
+<span class="nc" id="L169">      messageCacheManager.sendMessage(FLUSH_ONLINE_MESSAGE_CACHE, msg)</span>
+    }
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

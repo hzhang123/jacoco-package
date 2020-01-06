@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>YunpianSmsHandlerImpl.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">handlers.impl</a> &gt; <span class="el_source">YunpianSmsHandlerImpl.scala</span></div><h1>YunpianSmsHandlerImpl.scala</h1><pre class="source lang-java linenums">package handlers.impl
+
+import com.typesafe.scalalogging.LazyLogging
+import com.yunpian.sdk.YunpianClient
+import com.yunpian.sdk.constant.YunpianConstant
+import io.growing.marketing.common.model.{ ShortMessage, SmsConfig }
+import javax.inject.Inject
+
+<span class="pc bnc" id="L9" title="All 4 branches missed.">class YunpianSmsHandlerImpl @Inject() extends LazyLogging {</span>
+  def queryTemplate(templateCode: String, config: SmsConfig): Either[String, String] = {
+<span class="nc" id="L11">    val client = getClient(config)</span>
+<span class="nc" id="L12">    val param = client.newParam(1)</span>
+<span class="nc" id="L13">    param.put(YunpianConstant.TPL_ID, templateCode)</span>
+<span class="nc bnc" id="L14" title="All 2 branches missed.">    if (client.tpl().get(param).isSucc) {</span>
+<span class="nc" id="L15">      val template = client.tpl().get(param).getData.get(0)</span>
+<span class="nc" id="L16">      template.getCheck_status match {</span>
+<span class="nc bnc" id="L17" title="All 2 branches missed.">        case &quot;FAIL&quot; =&gt; Left(&quot;短信模板未经审核&quot;)</span>
+<span class="nc" id="L18">        case _ =&gt; Right(template.getTpl_content)</span>
+      }
+    } else {
+<span class="nc" id="L21">      Left(&quot;请检查模板id和APIKEY是否正确.&quot;)</span>
+    }
+  }
+
+  def querySignName(signName: String, config: SmsConfig): Either[String, String] = {
+<span class="nc" id="L26">    val client = getClient(config)</span>
+<span class="nc" id="L27">    val param = client.newParam(1)</span>
+<span class="nc" id="L28">    param.put(YunpianConstant.SIGN, signName)</span>
+<span class="nc" id="L29">    val signs = client.sign().get(param).getData.getSign</span>
+<span class="nc bnc" id="L30" title="All 2 branches missed.">    if (signs.size() &gt; 0) {</span>
+<span class="nc" id="L31">      Right(signs.get(0).getSign)</span>
+    } else {
+<span class="nc" id="L33">      Left(&quot;not found&quot;)</span>
+    }
+  }
+
+  def sendSingleMessage(shortMsg: ShortMessage, phoneNum: String, config: SmsConfig): Either[String, String] = {
+<span class="nc" id="L38">    val client = getClient(config)</span>
+<span class="nc" id="L39">    val param = client.newParam(2)</span>
+<span class="nc" id="L40">    val templateContent = queryTemplate(shortMsg.templateCode.getOrElse(&quot;&quot;), config) match {</span>
+<span class="nc bnc" id="L41" title="All 2 branches missed.">      case Right(v) =&gt; v</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">      case Left(_) =&gt; &quot;&quot;</span>
+    }
+<span class="nc" id="L44">    val msg = templateContent.replaceAll(&quot;\\#(.*?)\\#&quot;, &quot;%s&quot;)</span>
+<span class="nc" id="L45">      .format(shortMsg.testValues: _*)</span>
+<span class="nc" id="L46">    param.put(YunpianConstant.MOBILE, phoneNum)</span>
+<span class="nc" id="L47">    param.put(YunpianConstant.TEXT, msg)</span>
+<span class="nc" id="L48">    val response = client.sms().single_send(param)</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">    if (response.getCode &gt; 0) {</span>
+<span class="nc" id="L50">      Left(response.getDetail)</span>
+    } else {
+<span class="nc" id="L52">      Right(response.getDetail)</span>
+    }
+  }
+
+  private def getClient(smsConfig: SmsConfig) = {
+<span class="nc" id="L57">    new YunpianClient(smsConfig.providerKey).init()</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

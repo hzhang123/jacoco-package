@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbTestDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">AbTestDao.scala</span></div><h1>AbTestDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import com.typesafe.scalalogging.LazyLogging
+import io.growing.marketing.common.model.AbTest
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import javax.inject.Inject
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.lifted.{ Rep, Tag }
+
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+
+<span class="fc" id="L15">class AbTestTable(tag: Tag) extends BaseTable[AbTest](tag, &quot;ab_test&quot;) {</span>
+<span class="fc" id="L16">  def ai: Rep[String] = column(&quot;ai&quot;)</span>
+
+<span class="fc" id="L18">  def name: Rep[String] = column(&quot;name&quot;)</span>
+
+<span class="fc" id="L20">  def messages: Rep[List[Int]] = column(&quot;messages&quot;)</span>
+
+<span class="fc" id="L22">  def latestMessages: Rep[List[Int]] = column(&quot;latest_messages&quot;)</span>
+
+<span class="fc" id="L24">  def abDimension: Rep[Option[String]] = column(&quot;ab_dimension&quot;)</span>
+
+<span class="fc" id="L26">  def compareType: Rep[String] = column(&quot;compare_type&quot;)</span>
+
+  @Override
+<span class="fc" id="L29">  def * = (id.?, ai, projectId, creatorId, updaterId, state, name, messages,</span>
+<span class="pc" id="L30">    latestMessages, abDimension, compareType, createdAt, updatedAt) &lt;&gt; ((AbTest.apply _).tupled, AbTest.unapply)</span>
+}
+
+<span class="pc bnc" id="L33" title="All 12 branches missed.">class AbTestDao @Inject() (override val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="fc" id="L34">  extends HasDatabaseConfigProvider[GrowingPostgresDriver] with LazyLogging {</span>
+
+<span class="fc" id="L36">  val table = TableQuery[AbTestTable]</span>
+
+<span class="fc" id="L38">  val abTestMessage = TableQuery[AbTestMessageTable]</span>
+
+  def insert(m: AbTest): Future[AbTest] = {
+<span class="nc" id="L41">    db.run((table returning table.map(_.id) into ((model, id) =&gt; model.withId(id))) += m)</span>
+  }
+
+  def update(m: AbTest, id: Int): Future[Int] = {
+<span class="nc" id="L45">    db.run(table.filter(t =&gt; t.id === id &amp;&amp; t.state =!= Status.archived).update(m))</span>
+  }
+
+  def findByName(projectId: Int, name: String): Future[Option[AbTest]] = {
+<span class="nc" id="L49">    db.run(table.filter(t =&gt; t.projectId === projectId &amp;&amp; t.name === name &amp;&amp; t.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findByNameInOthers(projectId: Int, id: Int, name: String): Future[Option[AbTest]] = {
+<span class="nc" id="L53">    db.run(table.filter(t =&gt; t.projectId === projectId &amp;&amp; t.id =!= id &amp;&amp; t.name === name &amp;&amp; t.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findById(projectId: Int, id: Int): Future[Option[AbTest]] = {
+<span class="nc" id="L57">    db.run(table.filter(t =&gt; t.id === id &amp;&amp; t.projectId === projectId &amp;&amp; t.state =!= Status.archived).result.headOption)</span>
+  }
+
+  def findByProjectId(projectId: Int): Future[Seq[AbTest]] = {
+<span class="nc" id="L61">    db.run(table.filter(t =&gt; t.projectId === projectId &amp;&amp; t.state =!= Status.archived).sortBy(_.updatedAt.desc).result)</span>
+  }
+
+  def updatePlanningToActivated(ids: Seq[Int]): Future[Int] = {
+<span class="fc" id="L65">    db.run(abTestMessage.filter(a =&gt; a.id inSet ids).map(_.dimension.getOrElse(&quot;&quot;)).result).flatMap { l =&gt;</span>
+<span class="fc" id="L66">      db.run(table.filter(t =&gt; t.abDimension.inSet(l) &amp;&amp; t.state === Status.planning).map(_.state).update(Status.activated))</span>
+    }
+  }
+
+  def updateExpiredAbTest(ids: Seq[Int]): Future[List[Int]] = {
+<span class="nc" id="L71">    val abTestMessageGroup = db.run(abTestMessage.filter(a =&gt; a.id inSet ids).result).map { m =&gt;</span>
+<span class="nc" id="L72">      m.groupBy(_.dimension).values</span>
+<span class="nc" id="L73">    }.map(_.toList)</span>
+
+<span class="nc" id="L75">    val abTestGroup = abTestMessageGroup.flatMap { m =&gt;</span>
+<span class="nc" id="L76">      Future.sequence(m.map { n =&gt;</span>
+<span class="nc" id="L77">        db.run(table.filter(_.abDimension inSet n.map(_.dimension.getOrElse(&quot;&quot;))).result.head)</span>
+      })
+<span class="nc" id="L79">    }.map(_.toList)</span>
+
+    val aux = for {
+<span class="nc" id="L82">      a &lt;- abTestGroup</span>
+<span class="nc" id="L83">      b &lt;- abTestMessageGroup</span>
+<span class="nc" id="L84">    } yield a.zip(b)</span>
+
+<span class="nc" id="L86">    aux.flatMap { a =&gt;</span>
+<span class="nc" id="L87">      Future.sequence(a.map { pair =&gt;</span>
+<span class="nc" id="L88">        val latestMessages = pair._2.map(_.dbid).toList</span>
+<span class="nc" id="L89">        val messages = pair._1.messages ++ latestMessages</span>
+<span class="nc" id="L90">        db.run(table.filter(t =&gt; t.id === pair._1.id.get).map(t =&gt; (t.state, t.latestMessages, t.messages)).update((Status.stop, latestMessages, messages)))</span>
+      })
+    }
+  }
+
+  def deleteById(projectId: Int, id: Int): Future[Int] = {
+<span class="nc" id="L96">    db.run(table.filter(t =&gt; t.id === id &amp;&amp; t.projectId === projectId &amp;&amp; t.state =!= Status.archived).map(_.state).update(Status.archived))</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

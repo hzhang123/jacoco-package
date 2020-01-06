@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushChannelController.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers</a> &gt; <span class="el_source">PushChannelController.scala</span></div><h1>PushChannelController.scala</h1><pre class="source lang-java linenums">package controllers
+
+import java.util.{ Base64, Locale }
+
+import com.typesafe.scalalogging.LazyLogging
+import form.{ CertForm, PushChannelForm }
+import io.growing.micros.business.auth._
+import io.growing.micros.business.controller.{ AbstractController, ProjectActionComponent }
+import io.growing.micros.play.mvc.FutureUtils
+import io.growing.micros.utils.conversion.GrowingConversions._
+import javax.inject.{ Inject, Singleton }
+import play.api.libs.json.{ JsValue, Json }
+import play.api.mvc.Results.{ Ok, UnprocessableEntity }
+import play.api.mvc._
+import service.PushChannelService
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+@Singleton
+<span class="nc bnc" id="L20" title="All 24 branches missed.">class PushChannelController @Inject() (</span>
+<span class="nc" id="L21">  errorFormatterAction: ErrorFormatterAction,</span>
+<span class="nc" id="L22">  pushChannelService: PushChannelService,</span>
+<span class="nc" id="L23">  parse: PlayBodyParsers)</span>
+<span class="nc" id="L24">  extends AbstractController with ProjectActionComponent with PermissionCheckComponent</span>
+  with ACLControlComponent with LazyLogging with FutureUtils {
+
+<span class="nc" id="L27">  val readPermission: String = AuthConstants.Marketing.Read</span>
+<span class="nc" id="L28">  val managePermission: String = AuthConstants.Marketing.Manage</span>
+
+  def Actions[B](auth: String, projectUid: String, parse: BodyParser[B]): ActionBuilder[AuthRequest, B] = {
+<span class="nc" id="L31">    WithTimeoutAction(parse) andThen errorFormatterAction andThen new AuthAction(parse) andThen</span>
+<span class="nc" id="L32">      ProjectAction(projectUid.toId) andThen PermissionCheckAction(auth)</span>
+  }
+
+<span class="nc" id="L35">  def index(projectUid: String): Action[Unit] = Actions(readPermission, projectUid, parse.empty).async { implicit request =&gt;</span>
+<span class="nc" id="L36">    pushChannelService.findByProject(request.projectId).map { channels =&gt;</span>
+<span class="nc" id="L37">      Ok(Json.toJson(channels))</span>
+    }
+  }
+
+<span class="nc" id="L41">  def create(projectUid: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async { implicit request =&gt;</span>
+<span class="nc" id="L42">    request.body.validate[PushChannelForm].fold(</span>
+<span class="nc" id="L43">      errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L44">      form =&gt; {</span>
+<span class="nc" id="L45">        pushChannelService.create(form, request.project, request.projectId).map {</span>
+<span class="nc bnc" id="L46" title="All 2 branches missed.">          case Left(error) =&gt; UnprocessableEntity(jsonErrMsgGen(Seq(error)))</span>
+<span class="nc bnc" id="L47" title="All 2 branches missed.">          case Right(dto) =&gt; Ok(Json.toJson(dto))</span>
+        }
+      })
+  }
+
+<span class="nc" id="L52">  def update(projectUid: String, channelId: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async { implicit request =&gt;</span>
+<span class="nc" id="L53">    request.body.validate[PushChannelForm].fold(</span>
+<span class="nc" id="L54">      errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L55">      form =&gt; {</span>
+<span class="nc" id="L56">        implicit val local: Locale = request.locale</span>
+<span class="nc" id="L57">        pushChannelService.update(form, channelId.toId, request.project, request.userId).map {</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">          case Left(error) =&gt; UnprocessableEntity(jsonErrMsgGen(Seq(error)))</span>
+<span class="nc bnc" id="L59" title="All 2 branches missed.">          case Right(dto) =&gt; Ok(Json.toJson(dto))</span>
+        }
+      })
+  }
+
+<span class="nc" id="L64">  def uploadCert(projectUid: String): Action[JsValue] = Actions(managePermission, projectUid, parse.tolerantJson).async { implicit request =&gt;</span>
+<span class="nc" id="L65">    request.body.validate[CertForm].fold(</span>
+<span class="nc" id="L66">      errors =&gt; asyncJsonBadRequest()(errors),</span>
+<span class="nc" id="L67">      form =&gt; {</span>
+<span class="nc" id="L68">        val file = form.file.split(&quot;,&quot;)(1)</span>
+<span class="nc" id="L69">        val password = form.password</span>
+<span class="nc" id="L70">        val decode = (data: String) =&gt; Base64.getDecoder.decode(data)</span>
+<span class="nc" id="L71">        pushChannelService.upload(decode(file), password).map {</span>
+<span class="nc bnc" id="L72" title="All 2 branches missed.">          case Left(error) =&gt; UnprocessableEntity(jsonErrMsgGen(Seq(error)))</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">          case Right(res) =&gt; Ok(Json.obj(&quot;appSecret&quot; -&gt; res))</span>
+        }
+      })
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

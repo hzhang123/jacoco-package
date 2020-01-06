@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserLifeJourneyController.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers</a> &gt; <span class="el_source">UserLifeJourneyController.scala</span></div><h1>UserLifeJourneyController.scala</h1><pre class="source lang-java linenums">package controllers
+
+import form.{ TagForm, UserLifeJourneyForm }
+import io.growing.micros.business.auth.{ AuthAction, AuthConstants, AuthRequest, PermissionCheckComponent }
+import io.growing.micros.business.controller.{ AbstractController, ProjectActionComponent }
+import io.growing.micros.play.mvc.TimeoutAction
+import io.growing.micros.utils.conversion.GrowingConversions.UidWrapper
+import javax.inject.{ Inject, Singleton }
+import play.api.libs.json.{ JsValue, Json }
+import play.api.mvc.Results.Ok
+import play.api.mvc.{ Action, ActionBuilder, BodyParser, PlayBodyParsers }
+import service.UserLifeJourneyService
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+@Singleton
+<span class="nc bnc" id="L17" title="All 24 branches missed.">class UserLifeJourneyController @Inject() (</span>
+  ac: TimeoutAction,
+<span class="nc" id="L19">  userLifeJourneyService: UserLifeJourneyService,</span>
+<span class="nc" id="L20">  parse: PlayBodyParsers)</span>
+<span class="nc" id="L21">  extends AbstractController</span>
+  with ProjectActionComponent
+  with PermissionCheckComponent {
+
+<span class="nc" id="L25">  val readPermission: String = AuthConstants.Marketing.Read</span>
+<span class="nc" id="L26">  val managePermission: String = AuthConstants.Marketing.Manage</span>
+
+  def Actions[B](auth: String, projectUid: String, parse: BodyParser[B]): ActionBuilder[AuthRequest, B] =
+<span class="nc" id="L29">    WithTimeoutAction(parse) andThen</span>
+<span class="nc" id="L30">      new AuthAction(parse) andThen</span>
+<span class="nc" id="L31">      ProjectAction(projectUid.toId) andThen</span>
+<span class="nc" id="L32">      PermissionCheckAction(auth)</span>
+
+<span class="nc" id="L34">  def create(projectUid: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async {</span>
+<span class="nc" id="L35">    implicit request =&gt;</span>
+<span class="nc" id="L36">      request.body.validate[UserLifeJourneyForm].fold(</span>
+<span class="nc" id="L37">        errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L38">        form =&gt; {</span>
+<span class="nc" id="L39">          userLifeJourneyService.create(form, request.project, request.userId).map {</span>
+<span class="nc" id="L40">            dto =&gt; Ok(Json.toJson(dto))</span>
+          }
+        })
+  }
+
+<span class="nc" id="L45">  def update(projectUid: String, journeyUid: String): Action[JsValue] = Actions(managePermission, projectUid, parse.json).async {</span>
+<span class="nc" id="L46">    implicit request =&gt;</span>
+<span class="nc" id="L47">      request.body.validate[UserLifeJourneyForm].fold(</span>
+<span class="nc" id="L48">        errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L49">        form =&gt; {</span>
+<span class="nc" id="L50">          userLifeJourneyService.update(form, projectUid.toId, journeyUid.toId, request.userId).map {</span>
+<span class="nc" id="L51">            dto =&gt; Ok(Json.toJson(dto))</span>
+          }
+        })
+  }
+
+<span class="nc" id="L56">  def index(projectUid: String) = Actions(readPermission, projectUid, parse.empty).async {</span>
+<span class="nc" id="L57">    implicit request =&gt;</span>
+<span class="nc" id="L58">      userLifeJourneyService.findById(request.projectId).map {</span>
+<span class="nc" id="L59">        dto =&gt; Ok(Json.toJson(dto))</span>
+      }
+  }
+
+<span class="nc" id="L63">  def queryStages(projectUid: String) = Actions(readPermission, projectUid, parse.empty).async {</span>
+<span class="nc" id="L64">    implicit request =&gt;</span>
+<span class="nc" id="L65">      userLifeJourneyService.queryStages(request.projectId).map {</span>
+<span class="nc" id="L66">        dto =&gt; Ok(Json.toJson(dto))</span>
+      }
+  }
+
+<span class="nc" id="L70">  def tagUserNum(projectUid: String, userType: String) = Actions(readPermission, projectUid, parse.json).async {</span>
+<span class="nc" id="L71">    implicit request =&gt;</span>
+<span class="nc" id="L72">      request.body.validate[TagForm].fold(</span>
+<span class="nc" id="L73">        errors =&gt; jsonBadRequest(errors),</span>
+<span class="nc" id="L74">        form =&gt; {</span>
+<span class="nc" id="L75">          userLifeJourneyService.queryTagUserNum(form, userType, projectUid.toId).map {</span>
+<span class="nc" id="L76">            userNum =&gt; Ok(Json.obj(&quot;userNum&quot; -&gt; userNum))</span>
+          }
+        })
+  }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

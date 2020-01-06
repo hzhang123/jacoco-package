@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushApiRequestDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">PushApiRequestDao.scala</span></div><h1>PushApiRequestDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import dao.component.PushApiRequestComponent
+import io.growing.marketing.common.model.PushApiRequest
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import javax.inject.{ Inject, Singleton }
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+
+import scala.concurrent.Future
+
+/**
+ * @author : xhldtc
+ * @since : 2019-09-23
+ */
+
+@Singleton
+<span class="pc bnc" id="L18" title="All 8 branches missed.">class PushApiRequestDao @Inject() (protected val dbConfigProvider: DatabaseConfigProvider)</span>
+<span class="fc" id="L19">  extends PushApiRequestComponent with HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="nc bnc" id="L21" title="All 4 branches missed.">  lazy val insertQuery = PushApiRequestTable returning PushApiRequestTable.map(_.id) into ((ApiRequest, id) =&gt; ApiRequest.copy(id = Option(id)))</span>
+
+  def insert(pushApiRequest: PushApiRequest): Future[PushApiRequest] = {
+<span class="nc" id="L24">    db.run(insertQuery += pushApiRequest)</span>
+  }
+
+  //查看库里是否已经有除了当前插入的request之外已存在的cid request,如果有的话就不用创建message了，直接用已存在cid request的messageId查message表
+  def findExistCidRequest(cid: String): Future[Option[PushApiRequest]] = {
+<span class="nc" id="L29">    db.run(PushApiRequestTable.filter(r =&gt; r.cid === cid).result.headOption)</span>
+  }
+
+  def findByMessageIds(messageIds: Seq[Int]): Future[Seq[PushApiRequest]] = {
+<span class="nc" id="L33">    db.run(PushApiRequestTable.filter(r =&gt; r.messageId inSet messageIds).result)</span>
+  }
+
+  def deleteById(id: Int): Future[Int] = {
+<span class="nc" id="L37">    db.run(PushApiRequestTable.filter(r =&gt; r.id === id).delete)</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

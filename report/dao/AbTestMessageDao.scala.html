@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbTestMessageDao.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">dao</a> &gt; <span class="el_source">AbTestMessageDao.scala</span></div><h1>AbTestMessageDao.scala</h1><pre class="source lang-java linenums">package dao
+
+import dao.component.{ BaseMessageComponent, PushMetricsComponent, PushRuleComponent }
+import io.growing.marketing.common.model.AudienceType.AudienceType
+import io.growing.marketing.common.model.MessagePlatform.MessagePlatform
+import io.growing.marketing.common.model.MessageType.MessageType
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.Status
+import io.growing.micros.business.model.Status.Status
+import io.growing.micros.play.slickpg.GrowingPostgresDriver
+import io.growing.micros.play.slickpg.GrowingPostgresDriver.api._
+import javax.inject.Inject
+import play.api.db.slick.{ DatabaseConfigProvider, HasDatabaseConfigProvider }
+import slick.lifted.{ ProvenShape, Rep, Tag }
+import io.growing.micros.utils.time.DateTimeUtil.UTCNow
+import org.joda.time.{ DateTime, DateTimeZone }
+import slick.collection.heterogeneous.HNil
+import slick.collection.heterogeneous.syntax.{ ::, HNil }
+import scala.concurrent.ExecutionContext.Implicits.global
+
+import scala.concurrent.Future
+import MessageType.convertColumnType
+import MessagePlatform.convertColumnType
+import PushContent.convertColumnType
+import PushFilter.convertColumnType
+import ConversionTarget.convertColumnType
+
+<span class="fc" id="L28">class AbTestMessageTable(tag: Tag) extends BaseTable[AbTestMessage](tag, &quot;ab_test_messages&quot;) {</span>
+
+<span class="fc" id="L30">  def symbol: Rep[String] = column(&quot;symbol&quot;)</span>
+
+<span class="fc" id="L32">  def abTestVersion: Rep[Int] = column(&quot;ab_test_version&quot;)</span>
+
+<span class="fc" id="L34">  def rate: Rep[Option[Int]] = column(&quot;rate&quot;)</span>
+
+<span class="fc" id="L36">  def platform: Rep[MessagePlatform] = column(&quot;platform&quot;)</span>
+
+<span class="fc" id="L38">  def `type`: Rep[MessageType] = column(&quot;type&quot;)</span>
+
+<span class="fc" id="L40">  def name: Rep[String] = column(&quot;name&quot;)</span>
+
+<span class="fc" id="L42">  def audienceType: Rep[Option[AudienceType]] = column(&quot;audience_type&quot;)</span>
+
+<span class="fc" id="L44">  def audienceId: Rep[Option[String]] = column(&quot;audience_id&quot;)</span>
+
+<span class="fc" id="L46">  def audienceFilter: Rep[PushFilter] = column(&quot;audience_filter&quot;)</span>
+
+<span class="fc" id="L48">  def contentUrl: Rep[Option[String]] = column(&quot;content_url&quot;)</span>
+
+<span class="fc" id="L50">  def contentMetadata: Rep[Option[PushContent]] = column(&quot;content_metadata&quot;)</span>
+
+<span class="fc" id="L52">  def metricsRef: Rep[Int] = column(&quot;metrics_ref&quot;)</span>
+
+<span class="fc" id="L54">  def ctrlGroup: Rep[Boolean] = column(&quot;ctrl_group&quot;)</span>
+
+<span class="fc" id="L56">  def abMetric: Rep[Option[ConversionTarget]] = column(&quot;ab_metric&quot;)</span>
+
+<span class="fc" id="L58">  def dimension: Rep[Option[String]] = column(&quot;dimension&quot;)</span>
+
+<span class="fc" id="L60">  def totalActivatedTimes: Rep[Int] = column(&quot;total_activated_times&quot;)</span>
+
+  @Override
+<span class="fc" id="L63">  def * : ProvenShape[AbTestMessage] = (id.? :: projectId :: creatorId :: updaterId :: state ::</span>
+<span class="fc" id="L64">    platform :: `type` :: audienceType :: audienceId :: audienceFilter :: contentUrl ::</span>
+<span class="fc" id="L65">    contentMetadata :: name :: symbol :: abTestVersion :: rate :: metricsRef :: ctrlGroup ::</span>
+<span class="pc" id="L66">    abMetric :: dimension :: totalActivatedTimes :: createdAt :: updatedAt :: HNil) &lt;&gt; (mappingToBean, mappingToHList)</span>
+
+  type AbTestMessageHList = Option[Int] :: Int :: Int :: Int :: Status :: MessagePlatform :: MessageType :: Option[AudienceType] :: Option[String] :: PushFilter :: Option[String] :: Option[PushContent] :: String :: String :: Int :: Option[Int] :: Int :: Boolean :: Option[ConversionTarget] :: Option[String] :: Int :: DateTime :: DateTime :: HNil
+
+<span class="nc" id="L70">  private[this] def mappingToBean(hlist: AbTestMessageHList) = hlist match {</span>
+<span class="nc bnc" id="L71" title="All 24 branches missed.">    case f1 :: f2 :: f3 :: f4 :: f5 :: f6 :: f7 :: f8 :: f9 :: f10 :: f11 :: f12 ::</span>
+<span class="nc bnc" id="L72" title="All 24 branches missed.">      f13 :: f14 :: f15 :: f16 :: f17 :: f18 :: f19 :: f20 :: f21 :: f22 :: f23 :: HNil =&gt;</span>
+<span class="nc" id="L73">      AbTestMessage(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23)</span>
+  }
+
+<span class="nc bnc" id="L76" title="All 2 branches missed.">  private[this] def mappingToHList(abTestMessage: AbTestMessage) = abTestMessage match {</span>
+<span class="nc" id="L77">    case AbTestMessage(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23) =&gt;</span>
+<span class="nc" id="L78">      Some(f1 :: f2 :: f3 :: f4 :: f5 :: f6 :: f7 :: f8 :: f9 :: f10 :: f11 :: f12 :: f13 :: f14 :: f15 :: f16 :: f17 :: f18 :: f19 :: f20 :: f21 :: f22 :: f23 :: HNil)</span>
+  }
+}
+
+<span class="pc bnc" id="L82" title="All 8 branches missed.">class AbTestMessageDao @Inject() (override val dbConfigProvider: DatabaseConfigProvider, abTestRuleDao: AbTestRuleDao)</span>
+<span class="fc" id="L83">  extends PushRuleComponent with PushMetricsComponent with BaseMessageComponent with HasDatabaseConfigProvider[GrowingPostgresDriver] {</span>
+
+<span class="pc" id="L85">  override val ruleTableName = &quot;ab_test_rules&quot;</span>
+
+<span class="fc" id="L87">  val table = TableQuery[AbTestMessageTable]</span>
+
+  def insert(m: AbTestMessage): Future[AbTestMessage] = {
+<span class="nc" id="L90">    db.run((table returning table.map(_.id) into ((model, id) =&gt; model.withId(id))) += m)</span>
+  }
+
+  def update(m: AbTestMessage, id: Int): Future[Int] = {
+<span class="nc" id="L94">    db.run(table.filter(t =&gt; t.id === id &amp;&amp; t.state =!= Status.archived).update(m))</span>
+  }
+
+  def updateDimension(ids: Seq[Int], d: String): Future[Int] = {
+<span class="nc" id="L98">    db.run(table.filter(t =&gt; t.id inSet ids).map(_.dimension).update(Some(d)))</span>
+  }
+
+  def findById(id: Int): Future[Option[AbTestMessage]] = {
+<span class="nc" id="L102">    db.run(table.filter(t =&gt; t.id === id &amp;&amp; t.state =!= Status.archived).result.headOption)</span>
+  }
+
+  override def innerFindByIds(ids: Seq[Int]): Future[Seq[BaseMessage]] = {
+<span class="nc" id="L106">    db.run(table.filter(t =&gt; t.id inSet ids).result)</span>
+  }
+
+  override def findStopMessagesOneWeekAgo(): Future[Seq[BaseMessage]] = {
+<span class="nc" id="L110">    val sevenDayBefore = DateTime.now(DateTimeZone.UTC).minusHours(7 * 24) // 7 天前</span>
+<span class="nc" id="L111">    val eightDayBefore = DateTime.now(DateTimeZone.UTC).minusHours(7 * 24 + 1) // 再往前推移一个小时</span>
+<span class="nc" id="L112">    db.run(table.filter(m =&gt; m.state === Status.stop &amp;&amp; m.updatedAt &gt; eightDayBefore &amp;&amp; m.updatedAt &lt; sevenDayBefore).result)</span>
+  }
+
+  def findByIds(ids: Seq[Int]): Future[Seq[AbTestMessage]] = {
+<span class="fc" id="L116">    db.run(table.filter(t =&gt; t.id.inSet(ids)).result)</span>
+  }
+
+  def findLatestMessages(ids: List[Int]): Future[Seq[AbTestMessage]] = {
+<span class="nc" id="L120">    db.run(table.filter(t =&gt; t.id.inSet(ids)).sortBy(_.symbol).result)</span>
+  }
+
+  def findHistoryMessages(ids: List[Int]): Future[Seq[AbTestMessage]] = {
+<span class="nc" id="L124">    db.run(table.filter(t =&gt; t.id.inSet(ids)).sortBy(_.symbol).result)</span>
+  }
+
+  def deleteByIds(ids: List[Int]): Future[Int] = {
+<span class="nc" id="L128">    db.run(table.filter(t =&gt; t.id.inSet(ids) &amp;&amp; t.state =!= Status.archived).map(_.state).update(Status.archived))</span>
+  }
+
+  def updatePlanningToActivated(ids: Seq[Int]): Future[Int] = {
+<span class="fc" id="L132">    db.run(table.filter(m =&gt; (m.id inSet ids) &amp;&amp; m.state === Status.planning).map(m =&gt; (m.updatedAt, m.state)).update(UTCNow, Status.activated))</span>
+  }
+
+  def updateActivatedToStop(ids: Seq[Int]): Future[Int] = {
+<span class="nc" id="L136">    db.run(table.filter(m =&gt; (m.id inSet ids) &amp;&amp; m.state === Status.activated).map(m =&gt; (m.updatedAt, m.state)).update((UTCNow, Status.stop)))</span>
+  }
+
+  def updateMsgMetricsRules(
+    abTestMessage: AbTestMessage,
+    rulesToCreate: Seq[PushRule],
+    rulesToDelete: Seq[PushRule],
+    rulesToUpdate: Seq[PushRule],
+    oldRules: Option[Seq[PushRule]]): Future[Unit] = {
+
+<span class="nc bnc" id="L146" title="All 2 branches missed.">    val createRules = if (rulesToCreate.nonEmpty) PushRules ++= rulesToCreate else DBIO.successful()</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">    val deleteRules = if (rulesToDelete.nonEmpty) {</span>
+<span class="nc" id="L148">      PushRules.filter(_.id inSet rulesToDelete.map(_.id.get)).delete</span>
+    } else {
+<span class="nc" id="L150">      DBIO.successful(-1)</span>
+    }
+<span class="nc" id="L152">    val updateRules = DBIO.sequence {</span>
+<span class="nc bnc" id="L153" title="All 4 branches missed.">      if (rulesToUpdate.nonEmpty &amp;&amp; oldRules.isDefined) {</span>
+        (for {
+<span class="nc" id="L155">          ur &lt;- rulesToUpdate</span>
+<span class="nc bnc" id="L156" title="All 6 branches missed.">          or &lt;- oldRules.get; if or.productId == ur.productId</span>
+<span class="nc" id="L157">        } yield (or, ur)).map(e =&gt; abTestRuleDao.updateAction(e._1, e._2))</span>
+      } else {
+<span class="nc" id="L159">        Seq(DBIO.successful(-1))</span>
+      }
+    }
+    val updateMsg = {
+<span class="nc" id="L163">      val msg = table.filter(m =&gt; m.id === abTestMessage.dbid &amp;&amp; m.projectId === abTestMessage.projectId)</span>
+<span class="nc" id="L164">      msg.update(abTestMessage)</span>
+    }
+<span class="nc" id="L166">    db.run(DBIO.seq(createRules, deleteRules, updateRules, updateMsg).transactionally)</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

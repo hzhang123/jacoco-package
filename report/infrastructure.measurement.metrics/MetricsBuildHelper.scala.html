@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MetricsBuildHelper.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">infrastructure.measurement.metrics</a> &gt; <span class="el_source">MetricsBuildHelper.scala</span></div><h1>MetricsBuildHelper.scala</h1><pre class="source lang-java linenums">package infrastructure.measurement.metrics
+
+import form._
+import io.growing.micros.business.EventType
+import model.Statics
+
+/**
+ * MetricsBuildHelper
+ *
+ * @author damon lin
+ *         2019/11/18
+ */
+<span class="nc" id="L13">object MetricsBuildHelper {</span>
+
+  def buildEventLevelVarForm(): Seq[EventLevelVarForm] = {
+<span class="nc" id="L16">    Seq(</span>
+      // 消息名称
+<span class="nc" id="L18">      EventLevelVarForm(</span>
+<span class="nc" id="L19">        Statics.EVENT_LEVEL_VAR_MESSAGE_NAME_KEY,</span>
+<span class="nc" id="L20">        Statics.EVENT_LEVEL_VAR_MESSAGE_NAME,</span>
+<span class="nc" id="L21">        Some(Statics.EVENT_LEVEL_VAR_MESSAGE_NAME),</span>
+<span class="nc" id="L22">        EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L23">        isSystem = true),</span>
+      // 消息所属 campaign key
+<span class="nc" id="L25">      EventLevelVarForm(</span>
+<span class="nc" id="L26">        Statics.EVENT_LEVEL_VAR_CAMPAIGN_KEY_KEY,</span>
+<span class="nc" id="L27">        Statics.EVENT_LEVEL_VAR_CAMPAIGN_KEY,</span>
+<span class="nc" id="L28">        Some(Statics.EVENT_LEVEL_VAR_CAMPAIGN_KEY),</span>
+<span class="nc" id="L29">        EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L30">        isSystem = true),</span>
+      // 消息 id
+<span class="nc" id="L32">      EventLevelVarForm(</span>
+<span class="nc" id="L33">        Statics.EVENT_LEVEL_VAR_MESSAGE_ID_KEY,</span>
+<span class="nc" id="L34">        Statics.EVENT_LEVEL_VAR_MESSAGE_ID,</span>
+<span class="nc" id="L35">        Some(Statics.EVENT_LEVEL_VAR_MESSAGE_ID),</span>
+<span class="nc" id="L36">        EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L37">        isSystem = true),</span>
+      // 消息位置
+<span class="nc" id="L39">      EventLevelVarForm(</span>
+<span class="nc" id="L40">        Statics.EVENT_LEVEL_VAR_MESSAGE_INDEX_KEY,</span>
+<span class="nc" id="L41">        Statics.EVENT_LEVEL_VAR_MESSAGE_INDEX,</span>
+<span class="nc" id="L42">        Some(Statics.EVENT_LEVEL_VAR_MESSAGE_INDEX),</span>
+<span class="nc" id="L43">        EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L44">        isSystem = true),</span>
+      // 消息类型
+<span class="nc" id="L46">      EventLevelVarForm(</span>
+<span class="nc" id="L47">        Statics.EVENT_LEVEL_VAR_MESSAGE_TYPE_KEY,</span>
+<span class="nc" id="L48">        Statics.EVENT_LEVEL_VAR_MESSAGE_TYPE,</span>
+<span class="nc" id="L49">        Some(Statics.EVENT_LEVEL_VAR_MESSAGE_TYPE),</span>
+<span class="nc" id="L50">        EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L51">        isSystem = true))</span>
+
+  }
+
+  // 创建推送事件级变量表单
+  def buildPushMessageEventLevelVarForm(): Seq[EventLevelVarForm] = {
+<span class="nc" id="L57">    Seq(EventLevelVarForm(</span>
+<span class="nc" id="L58">      Statics.EVENT_LEVEL_VAR_PUSH_MESSAGE_NAME_KEY,</span>
+<span class="nc" id="L59">      Statics.EVENT_LEVEL_VAR_PUSH_MESSAGE_NAME_NAME,</span>
+<span class="nc" id="L60">      Some(Statics.EVENT_LEVEL_VAR_PUSH_MESSAGE_NAME_NAME),</span>
+<span class="nc" id="L61">      EventLevelVariableTypeLocal.STRING.toString,</span>
+<span class="nc" id="L62">      isSystem = true))</span>
+  }
+
+  def buildPushVisitorVariable(): Seq[VisitorVariableForm] = {
+<span class="nc" id="L66">    Seq(</span>
+<span class="nc" id="L67">      VisitorVariableForm(</span>
+<span class="nc" id="L68">        Statics.VISITOR_VAR_PUSH_PACKAGE_KEY,</span>
+<span class="nc" id="L69">        Statics.VISITOR_VAR_PUSH_PACKAGE_NAME,</span>
+<span class="nc" id="L70">        Some(Statics.VISITOR_VAR_PUSH_PACKAGE_NAME),</span>
+<span class="nc" id="L71">        isSystem = true),</span>
+<span class="nc" id="L72">      VisitorVariableForm(</span>
+<span class="nc" id="L73">        Statics.VISITOR_VAR_PUSH_CHANNEL_KEY,</span>
+<span class="nc" id="L74">        Statics.VISITOR_VAR_PUSH_CHANNEL_NAME,</span>
+<span class="nc" id="L75">        Some(Statics.VISITOR_VAR_PUSH_CHANNEL_NAME),</span>
+<span class="nc" id="L76">        isSystem = true),</span>
+<span class="nc" id="L77">      VisitorVariableForm(</span>
+<span class="nc" id="L78">        Statics.VISITOR_VAR_PUSH_TOKEN_KEY,</span>
+<span class="nc" id="L79">        Statics.VISITOR_VAR_PUSH_TOKEN_NAME,</span>
+<span class="nc" id="L80">        Some(Statics.VISITOR_VAR_PUSH_TOKEN_NAME),</span>
+<span class="nc" id="L81">        isSystem = true),</span>
+<span class="nc" id="L82">      VisitorVariableForm(</span>
+<span class="nc" id="L83">        Statics.VISITOR_VAR_PUSH_NOTIFICATION_ENABLE_KEY,</span>
+<span class="nc" id="L84">        Statics.VISITOR_VAR_PUSH_NOTIFICATION_ENABLE_NAME,</span>
+<span class="nc" id="L85">        Some(Statics.VISITOR_VAR_PUSH_NOTIFICATION_ENABLE_NAME),</span>
+<span class="nc" id="L86">        isSystem = true))</span>
+  }
+
+  def buildEventFormsByType(attributes: List[Attribute], typ: String): List[EventForm] = {
+<span class="nc" id="L90">    typ match {</span>
+<span class="nc bnc" id="L91" title="All 6 branches missed.">      case Statics.GLOBAL =&gt;</span>
+<span class="nc" id="L92">        buildGlobalEventForms(attributes)</span>
+<span class="nc bnc" id="L93" title="All 6 branches missed.">      case Statics.PUSH_GLOBAL =&gt;</span>
+<span class="nc" id="L94">        buildPushMessageGlobalEventForms(attributes)</span>
+    }
+  }
+
+  // 创建全局事件表单
+  def buildGlobalEventForms(attributes: List[Attribute]): List[EventForm] = {
+    // 统计组件点击量
+<span class="nc" id="L101">    val clickEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L102">      Statics.STATIC_CTA_CLICK_EVENT_KEY,</span>
+<span class="nc" id="L103">      Statics.STATIC_CTA_CLICK_EVENT_NAME,</span>
+<span class="nc" id="L104">      attributes,</span>
+<span class="nc" id="L105">      Statics.InAppMessageDomain.get)</span>
+    // 统计消息浏览量
+<span class="nc" id="L107">    val impEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L108">      Statics.STATIC_MESSAGE_IMP_EVENT_KEY,</span>
+<span class="nc" id="L109">      Statics.STATIC_MESSAGE_IMP_EVENT_NAME,</span>
+<span class="nc" id="L110">      attributes,</span>
+<span class="nc" id="L111">      Statics.InAppMessageDomain.get)</span>
+    // 统计消息关闭数量
+<span class="nc" id="L113">    val closeEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L114">      Statics.STATIC_MESSAGE_CLOSE_EVENT_KEY,</span>
+<span class="nc" id="L115">      Statics.STATIC_MESSAGE_CLOSE_EVENT_NAME,</span>
+<span class="nc" id="L116">      attributes,</span>
+<span class="nc" id="L117">      Statics.InAppMessageDomain.get)</span>
+<span class="nc" id="L118">    List(clickEventForm, impEventForm, closeEventForm)</span>
+  }
+
+  // 创建推送全局事件表单
+  def buildPushMessageGlobalEventForms(attributes: List[Attribute]): List[EventForm] = {
+    // 统计推送消息点击量
+<span class="nc" id="L124">    val clickEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L125">      Statics.STATIC_PUSH_MESSAGE_CLICK_EVENT_KEY,</span>
+<span class="nc" id="L126">      Statics.STATIC_PUSH_MESSAGE_CLICK_EVENT_NAME,</span>
+<span class="nc" id="L127">      attributes,</span>
+<span class="nc" id="L128">      Statics.PushMessageDomain.get)</span>
+    // 统计推送消息浏览量
+<span class="nc" id="L130">    val impEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L131">      Statics.STATIC_PUSH_MESSAGE_IMP_EVENT_KEY,</span>
+<span class="nc" id="L132">      Statics.STATIC_PUSH_MESSAGE_IMP_EVENT_NAME,</span>
+<span class="nc" id="L133">      attributes,</span>
+<span class="nc" id="L134">      Statics.PushMessageDomain.get)</span>
+    // 统计推送消息发送量
+<span class="nc" id="L136">    val sentEventForm = buildCounterEventForm(</span>
+<span class="nc" id="L137">      Statics.STATIC_PUSH_MESSAGE_SENT_EVENT_KEY,</span>
+<span class="nc" id="L138">      Statics.STATIC_PUSH_MESSAGE_SENT_EVENT_NAME,</span>
+<span class="nc" id="L139">      attributes,</span>
+<span class="nc" id="L140">      Statics.PushMessageDomain.get)</span>
+<span class="nc" id="L141">    List(clickEventForm, impEventForm, sentEventForm)</span>
+  }
+
+  /**
+   * 生成一个简单的 counter 类型的事件
+   *
+   * @param key
+   * @param name
+   * @return
+   */
+  def buildCounterEventForm(
+    key: String,
+    name: String,
+<span class="nc" id="L154">    attrs: List[Attribute] = List.empty,</span>
+    businessType: String): EventForm = {
+<span class="nc" id="L156">    EventForm(</span>
+<span class="nc" id="L157">      key,</span>
+<span class="nc" id="L158">      name,</span>
+<span class="nc" id="L159">      None,</span>
+<span class="nc" id="L160">      EventType.COUNTER.toString,</span>
+<span class="nc" id="L161">      businessType,</span>
+<span class="nc" id="L162">      attrs)</span>
+  }
+
+<span class="nc" id="L165">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

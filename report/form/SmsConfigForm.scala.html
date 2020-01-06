@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SmsConfigForm.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">form</a> &gt; <span class="el_source">SmsConfigForm.scala</span></div><h1>SmsConfigForm.scala</h1><pre class="source lang-java linenums">package form
+
+import io.growing.marketing.common.model.{ SmsConfig, SmsProvider }
+import io.growing.marketing.common.model.SmsProvider.SmsProvider
+import io.growing.micros.business.model.Status
+import play.api.libs.functional.syntax._
+import play.api.libs.json.{ JsPath, Reads }
+
+<span class="nc bnc" id="L9" title="All 53 branches missed.">final case class SmsConfigForm(</span>
+<span class="nc" id="L10">  smsProvider: SmsProvider,</span>
+<span class="nc" id="L11">  providerKey: String,</span>
+<span class="nc" id="L12">  providerValue: Option[String],</span>
+<span class="nc" id="L13">  signNames: List[String],</span>
+<span class="nc" id="L14">  numAttribute: Option[String],</span>
+<span class="nc" id="L15">  sendPath: Option[String]) {</span>
+
+  def buildSmsConfig(projectId: Int, creatorId: Int, updaterId: Int): SmsConfig = {
+<span class="nc" id="L18">    SmsConfig(</span>
+<span class="nc" id="L19">      None,</span>
+<span class="nc" id="L20">      projectId,</span>
+<span class="nc" id="L21">      creatorId,</span>
+<span class="nc" id="L22">      updaterId,</span>
+<span class="nc" id="L23">      state,</span>
+<span class="nc" id="L24">      smsProvider,</span>
+<span class="nc" id="L25">      providerKey,</span>
+<span class="nc" id="L26">      providerValue,</span>
+<span class="nc" id="L27">      signNames,</span>
+<span class="nc" id="L28">      numAttribute,</span>
+<span class="nc" id="L29">      sendPath)</span>
+  }
+
+  def state: Status.Value = {
+<span class="nc" id="L33">    smsProvider match {</span>
+<span class="nc bnc" id="L34" title="All 6 branches missed.">      case SmsProvider.aliyun =&gt;</span>
+<span class="nc bnc" id="L35" title="All 2 branches missed.">        if (providerValue.isDefined) Status.activated else Status.draft</span>
+<span class="nc bnc" id="L36" title="All 6 branches missed.">      case SmsProvider.yunpian =&gt;</span>
+<span class="nc" id="L37">        Status.activated</span>
+<span class="nc bnc" id="L38" title="All 6 branches missed.">      case SmsProvider.chuanglan =&gt;</span>
+<span class="nc bnc" id="L39" title="All 4 branches missed.">        if (providerValue.isDefined &amp;&amp; sendPath.isDefined) Status.activated else Status.draft</span>
+    }
+  }
+}
+
+<span class="nc" id="L44">object SmsConfigForm {</span>
+<span class="nc" id="L45">  implicit val reads: Reads[SmsConfigForm] = (</span>
+<span class="nc" id="L46">    (JsPath \ &quot;smsProvider&quot;).read[SmsProvider] and</span>
+<span class="nc" id="L47">    (JsPath \ &quot;providerKey&quot;).read[String] and</span>
+<span class="nc" id="L48">    (JsPath \ &quot;providerValue&quot;).readNullable[String] and</span>
+<span class="nc" id="L49">    (JsPath \ &quot;signNames&quot;).read[List[String]] and</span>
+<span class="nc" id="L50">    (JsPath \ &quot;numAttribute&quot;).readNullable[String] and</span>
+<span class="nc" id="L51">    (JsPath \ &quot;sendPath&quot;).readNullable[String])(SmsConfigForm.apply _)</span>
+<span class="nc" id="L52">}</span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

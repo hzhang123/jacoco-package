@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageContentHandlerImpl.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">handlers.impl</a> &gt; <span class="el_source">MessageContentHandlerImpl.scala</span></div><h1>MessageContentHandlerImpl.scala</h1><pre class="source lang-java linenums">package handlers.impl
+
+import java.util.Base64
+
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ PushMediaDao, PushMetricsDao }
+import dtos.EventLevelVarDTO
+import form.{ BaseMessageForm, MediaForm }
+import handlers.MessageContentHandler
+import infrastructure.measurement.MessageMeasurementHandler
+import io.growing.marketing.common.model.components.{ Img, ImgConfig }
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.Project
+import io.growing.micros.play.module.FileService
+import io.growing.micros.utils.time.DateTimeUtil.now
+import javax.inject.{ Inject, Singleton }
+import play.api.libs.json.Json
+import play.api.mvc.Result
+import play.api.mvc.Results.Ok
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * MessageContentHandlerImpl
+ *
+ * @author damon lin
+ *         2019/6/28
+ */
+@Singleton
+<span class="nc bnc" id="L31" title="All 4 branches missed.">class MessageContentHandlerImpl @Inject() (</span>
+<span class="nc" id="L32">  fileService: FileService,</span>
+<span class="nc" id="L33">  pushMetricsDao: PushMetricsDao,</span>
+<span class="nc" id="L34">  pushMediaDao: PushMediaDao,</span>
+<span class="nc" id="L35">  pushMetricsHandler: MessageMeasurementHandler) extends MessageContentHandler with LazyLogging {</span>
+
+  override def createOptionUrl(form: BaseMessageForm, message: BaseMessage, pushMetrics: PushMetrics,
+<span class="nc" id="L38">    project: Project): Future[Option[String]] = form.content match {</span>
+
+<span class="nc bnc" id="L40" title="All 2 branches missed.">    case Some(content) =&gt;</span>
+<span class="nc" id="L41">      val eventVarDTO = EventLevelVarDTO.fromPushMetrics(pushMetrics)</span>
+<span class="nc" id="L42">      uploadPage(project, content, eventVarDTO, message)</span>
+<span class="nc bnc" id="L43" title="All 2 branches missed.">    case None ⇒ Future.successful(None)</span>
+  }
+
+  override def updateOptionUrl(form: BaseMessageForm, message: BaseMessage,
+<span class="nc" id="L47">    project: Project, userId: Int): Future[Option[String]] = form.content match {</span>
+<span class="nc bnc" id="L48" title="All 2 branches missed.">    case Some(content) ⇒ updateContent(content, project, message, userId)</span>
+<span class="nc" id="L49">    case _ ⇒ Future.successful(None)</span>
+  }
+
+  override def handleUpload(project: Project, form: MediaForm): Future[Result] = {
+<span class="nc" id="L53">    val file = form.file</span>
+<span class="nc" id="L54">    val decode = (data: String) =&gt; Base64.getDecoder.decode(data.split(',')(1))</span>
+<span class="nc" id="L55">    val prefix = genPrefix(project)</span>
+<span class="nc" id="L56">    val p = &quot;^data:image/?([a-zA-Z]+);base64$&quot;.r</span>
+<span class="nc bnc" id="L57" title="All 6 branches missed.">    val p(fileType) = file.split(&quot;,&quot;)(0) // data:image/jpeg;base64</span>
+<span class="nc" id="L58">    val fileName = genFileName(s&quot;${form.fileName}.$fileType&quot;)</span>
+<span class="nc" id="L59">    persistMedia(prefix + &quot;/&quot; + fileName, fileType, file, project)</span>
+<span class="nc" id="L60">    fileService.upload(&quot;media&quot;, prefix, fileName, decode(file), shared = &quot;true&quot;).map { url =&gt;</span>
+<span class="nc" id="L61">      Ok(Json.obj(&quot;url&quot; -&gt; url))</span>
+    }
+  }
+
+  override def uploadPage(project: Project, content: PushContent, eventLevelVarDTO: Option[EventLevelVarDTO], pushMessage: BaseMessage): Future[Option[String]] = {
+<span class="nc bnc" id="L66" title="All 14 branches missed.">    if (pushMessage.isApp &amp;&amp; (pushMessage.`type` == MessageType.popupWindow || pushMessage.`type` == MessageType.abTest)) {</span>
+<span class="nc" id="L67">      val eventLevelVarKey = eventLevelVarDTO.map(_.key).getOrElse(&quot;&quot;)</span>
+<span class="nc" id="L68">      generatePage(content, eventLevelVarKey, pushMessage.name, pushMessage.dbid, eventLevelVarDTO.isDefined, project.dbid).flatMap {</span>
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        case Some(pageContent) =&gt;</span>
+<span class="nc" id="L70">          val fileName = s&quot;${System.currentTimeMillis()}-popupWindow.html&quot;</span>
+<span class="nc" id="L71">          val filePath = genPrefix(project)</span>
+<span class="nc" id="L72">          fileService.upload(&quot;pages&quot;, filePath, fileName, pageContent.getBytes, shared = &quot;true&quot;).map(Some(_))</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        case None =&gt; Future.successful(None)</span>
+      }
+<span class="nc bnc" id="L75" title="All 6 branches missed.">    } else if (pushMessage.`type` == MessageType.banner) {</span>
+      // banner 类型的消息只上传图片
+<span class="nc" id="L77">      val maybeUrl = pushMessage.contentMetadata.flatMap(_.SimpleImgContentUrl)</span>
+<span class="nc" id="L78">      Future.successful(maybeUrl)</span>
+    } else {
+<span class="nc" id="L80">      Future.successful(None)</span>
+    }
+  }
+
+  override def updateContent(content: PushContent, project: Project, message: BaseMessage, userId: Int): Future[Option[String]] = {
+    for {
+<span class="nc" id="L86">      globalPushMetric &lt;- pushMetricsHandler.findInAppMetricByProject(project.dbid)</span>
+      // 查询出对应指标
+<span class="nc bnc" id="L88" title="All 2 branches missed.">      metrics &lt;- pushMetricsDao.findById(message.metricsRef)</span>
+      // 如果全局指标为空，使用对应指标
+<span class="nc" id="L90">      actualMetric = metrics.getOrElse(globalPushMetric.get)</span>
+      // 旧数据eventDTO中的dimensions为null
+<span class="nc" id="L92">      eventDTO = EventLevelVarDTO.fromPushMetrics(actualMetric)</span>
+      // 上传页面
+<span class="nc" id="L94">      pageUrl &lt;- uploadPage(project, content, eventDTO, message)</span>
+<span class="nc" id="L95">    } yield pageUrl</span>
+  }
+
+  override def persistMedia(fileName: String, fileType: String, content: String, project: Project): Future[PushMedia] = {
+<span class="nc" id="L99">    val pushMedia = PushMedia(</span>
+<span class="nc" id="L100">      None,</span>
+<span class="nc" id="L101">      project.dbid,</span>
+<span class="nc" id="L102">      fileName,</span>
+<span class="nc" id="L103">      fileType,</span>
+<span class="nc" id="L104">      content)</span>
+<span class="nc" id="L105">    pushMediaDao.insert(pushMedia)</span>
+  }
+
+  /**
+   * @todo 移动端的模板生成逻辑不变，其他各端，根据JSON来生成窗口
+   *       移动端的弹窗默认只有一张图片
+   * @param content
+   * @param id
+   * @return
+   */
+  private[this] def generatePage(content: PushContent, eventLevelVarKey: String, name: String,
+    id: Int, isAddDimension: Boolean, projectId: Int): Future[Option[String]] = {
+
+<span class="nc bnc" id="L118" title="All 2 branches missed.">    if (content.components.length == 1) {</span>
+<span class="nc" id="L119">      content.components.head match {</span>
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        case c: Img ⇒</span>
+<span class="nc" id="L121">          val target = c.config.target.get</span>
+<span class="nc" id="L122">          val targets = target.map(p =&gt; s&quot;'${p._1}':'${p._2}'&quot;).toSeq</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">          val encodedImg: Future[Option[String]] = if (c.config.src.get.equals(&quot;&quot;)) {</span>
+<span class="nc" id="L124">            Future.successful(None)</span>
+          } else {
+<span class="nc" id="L126">            val fileName = c.config.src.get.split(&quot;media&quot;)(1).stripPrefix(&quot;/&quot;) // https://k8s-statics.growingio.com/media/20190802/3/1564719880563/0802img.jpeg</span>
+<span class="nc" id="L127">            pushMediaDao.findMedia(projectId, fileName).map {</span>
+<span class="nc bnc" id="L128" title="All 2 branches missed.">              case None =&gt; Some(c.config.src.get)</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">              case Some(pushMedia) =&gt; Some(pushMedia.content)</span>
+            }
+          }
+<span class="nc" id="L132">          encodedImg.map(ei =&gt; ImgConfig(ei, None, c.config.target))</span>
+<span class="nc" id="L133">            .map(newImgConfig =&gt; content.components.head.asInstanceOf[Img].copy(config = newImgConfig))</span>
+<span class="nc" id="L134">            .map { img =&gt;</span>
+<span class="nc" id="L135">              Some(views.html.marketing.inAppMessage.page(content, targets, eventLevelVarKey, name, id, img, isAddDimension).body)</span>
+            }
+<span class="nc" id="L137">        case _ ⇒ Future.successful(None)</span>
+      }
+    } else {
+<span class="nc" id="L140">      Future.successful(None)</span>
+    }
+  }
+
+  private[this] def genPrefix(project: Project): String = {
+<span class="nc" id="L145">    s&quot;${now.toString(&quot;yyyyMMdd&quot;)}/${project.dbid}/${System.currentTimeMillis()}&quot;</span>
+  }
+
+  private[this] def genFileName(name: String): String = {
+<span class="nc" id="L149">    val charsRegex = &quot;&quot;&quot;[\[\]【】《》 。~!@#$%\^\+\*&amp;\\\/\?\|:&lt;&gt;{}()';=&quot;]&quot;&quot;&quot;</span>
+<span class="nc" id="L150">    s&quot;${now.toString(&quot;MMdd&quot;)}&quot; + s&quot;${name.replaceAll(charsRegex, &quot;&quot;)}&quot;</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

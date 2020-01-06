@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppPushMessageHandler.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">business.push</a> &gt; <span class="el_source">AppPushMessageHandler.scala</span></div><h1>AppPushMessageHandler.scala</h1><pre class="source lang-java linenums">package business.push
+
+import business.BaseMessageHandler
+import business.inapp.InAppMessageHandler
+import com.google.inject.Inject
+import dao.PushChannelDao
+import dtos.FlushCacheMessage
+import handlers.PushMessageHandler
+import infrastructure.lock.MessageCacheManager
+import infrastructure.measurement.MessageMeasurementHandler
+import io.growing.micros.business.model.Status
+import javax.inject.Singleton
+import model.Statics.Queue.FLUSH_MESSAGE_CACHE
+import model.context.{ AppMessageContext, MessageContext }
+import play.api.libs.json.Json
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * AppPushMessageHandler
+ *
+ * @author damon lin
+ *         2019/11/7
+ */
+@Singleton
+<span class="nc" id="L27">class AppPushMessageHandler @Inject() (</span>
+<span class="nc" id="L28">  inAppMessageHandler: InAppMessageHandler,</span>
+<span class="nc" id="L29">  messageCacheManager: MessageCacheManager,</span>
+  metricsHandler: MessageMeasurementHandler,
+<span class="nc" id="L31">  messageHandler: PushMessageHandler,</span>
+<span class="nc" id="L32">  pushJobHandler: PushJobsHandlerImpl,</span>
+<span class="nc" id="L33">  pushChannelDao: PushChannelDao) extends BaseMessageHandler[AppMessageContext] {</span>
+
+  override def preCreateHandle(context: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L36">    inAppMessageHandler.preCreateHandle(context)</span>
+  }
+
+  override def handleMetrics(context: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L40">    inAppMessageHandler.handleMetrics(context)</span>
+  }
+
+  override def insertMessage(context: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L44">    inAppMessageHandler.insertMessage(context)</span>
+  }
+
+  override def createRule(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L48">    val context = shape(c)</span>
+<span class="nc bnc" id="L49" title="All 2 branches missed.">    val (form, project, _) = context.parameters</span>
+<span class="nc" id="L50">    val message = context.getMessage</span>
+<span class="nc" id="L51">    val pushMetrics = context.getMetrics</span>
+    for {
+<span class="nc bnc" id="L53" title="All 2 branches missed.">      products ← messageHandler.getProductsFromRuleForm(project.dbid, form.rule.get, form.platform)</span>
+<span class="nc" id="L54">      rulesToCreate = messageHandler.buildRulesFromForm(form, products, message)</span>
+      // 推送不需要上传图片生成网页
+<span class="nc" id="L56">      newMessage = message.copy(contentUrl = None, metricsRef = pushMetrics.dbid)</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">      _ ← inAppMessageHandler.updateMessageAndRules(newMessage, rulesToCreate)</span>
+<span class="nc" id="L58">      newContext = context.copy(message = Some(newMessage), rules = Some(rulesToCreate.toList))</span>
+      // 推送需要发布推送任务
+<span class="nc bnc" id="L60" title="All 4 branches missed.">      _ &lt;- if (newMessage.isActive &amp;&amp; newMessage.isPush) pushJobHandler.publishPushJob(newContext) else Future.successful(Unit)</span>
+<span class="nc" id="L61">    } yield newContext</span>
+  }
+
+  override def afterCreateHandle(c: MessageContext): Future[AppMessageContext] = {
+<span class="nc" id="L65">    inAppMessageHandler.afterCreateHandle(c)</span>
+  }
+
+  // ================================= update ==========================
+
+  override def preUpdateHandle(context: MessageContext, id: Int): Future[MessageContext] = {
+    // 推送的状态如果为 stop ，就返回badRequest
+<span class="nc" id="L72">    messageHandler.validatePushState(context, id, Status.stop).flatMap(</span>
+<span class="nc" id="L73">      _ =&gt; inAppMessageHandler.preUpdateHandle(context, id))</span>
+  }
+
+  override def updateMessage(context: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L77">    inAppMessageHandler.updateMessage(context)</span>
+  }
+
+  override def updateRule(context: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L81">    inAppMessageHandler.updateRule(context)</span>
+  }
+
+  override def afterUpdateHandle(c: MessageContext): Future[AppMessageContext] = {
+<span class="nc" id="L85">    val context = shape(c)</span>
+<span class="nc" id="L86">    val form = context.form</span>
+<span class="nc" id="L87">    val message = context.getMessage</span>
+<span class="nc" id="L88">    val rules = context.getRules</span>
+<span class="nc" id="L89">    val firstUpdateToActivated = context.firstUpdateToActivated</span>
+    for {
+<span class="nc bnc" id="L91" title="All 2 branches missed.">      _ ← messageCacheManager.sendMessage(FLUSH_MESSAGE_CACHE, Json.toJson(FlushCacheMessage(message.ai, rules.map(_.urlScheme))).toString())</span>
+<span class="nc" id="L92">      scheduleAt = form.rule.get.scheduleAt</span>
+      // 推送需要发布推送任务
+<span class="nc bnc" id="L94" title="All 6 branches missed.">      _ ← if (firstUpdateToActivated &amp;&amp; message.isPush &amp;&amp; scheduleAt.isEmpty) pushJobHandler.publishPushJobBySegment(message) else Future.successful(Unit)</span>
+<span class="nc" id="L95">    } yield context.asInstanceOf[AppMessageContext]</span>
+  }
+
+  override def shape(context: MessageContext): AppMessageContext = {
+<span class="nc" id="L99">    context.asInstanceOf[AppMessageContext]</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

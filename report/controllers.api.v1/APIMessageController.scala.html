@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>APIMessageController.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">controllers.api.v1</a> &gt; <span class="el_source">APIMessageController.scala</span></div><h1>APIMessageController.scala</h1><pre class="source lang-java linenums">package controllers.api.v1
+
+import java.util.Locale
+
+import controllers.api.APIBaseController
+import dao.ProductDao
+import dtos.ApiErrorResponse
+import form.MediaForm
+import form.api.{ APIPushMessageForm, InAppMessageAPIForm }
+import handlers.{ APIFormHandler, ApiPushTokenConverter, MessageContentHandler }
+import io.growing.marketing.common.model.AudienceType.AudienceType
+import io.growing.marketing.common.model.PushContent
+import io.growing.micros.business.dao.ProjectDao
+import io.growing.micros.business.model.Project
+import io.growing.micros.utils.conversion.GrowingConversions._
+import javax.inject.{ Inject, Singleton }
+import play.api.libs.json.Json
+import play.api.mvc.PlayBodyParsers
+import play.api.mvc.Results.{ NoContent, Ok }
+import service.auth.AuthenticationService
+import service.{ PushApiService, PushMessageService }
+import utils.TrackingManager
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * APIPushMessageController
+ *
+ * @author damon lin
+ *         2019/7/18
+ */
+@Singleton
+<span class="nc" id="L34">class APIMessageController @Inject() (</span>
+<span class="nc" id="L35">  trackingManager: TrackingManager,</span>
+<span class="nc" id="L36">  apiFormHandler: APIFormHandler,</span>
+  apiPushTokenConverter: ApiPushTokenConverter,
+<span class="nc" id="L38">  parse: PlayBodyParsers,</span>
+  projectDao: ProjectDao,
+  authService: AuthenticationService,
+<span class="nc" id="L41">  productDao: ProductDao,</span>
+<span class="nc" id="L42">  messageContentHandler: MessageContentHandler,</span>
+<span class="nc" id="L43">  pushMessageService: PushMessageService,</span>
+<span class="nc" id="L44">  pushApiService: PushApiService) extends APIBaseController(parse, projectDao, authService) {</span>
+
+<span class="nc" id="L46">  def createPushMessage(projectUid: String) = Actions(projectUid, parse.json).async(parse.tolerantJson) { implicit request =&gt;</span>
+<span class="nc" id="L47">    request.body.validate[APIPushMessageForm].fold(</span>
+<span class="nc" id="L48">      errors =&gt; Future.successful(ApiErrorResponse.jsonBadRequest(errors)),</span>
+<span class="nc" id="L49">      form =&gt; {</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">        val productFuture = if (form.productId.nonEmpty) productDao.findByIds(request.projectId, Seq(form.productId.get.toId)).map(_.headOption)</span>
+<span class="nc" id="L51">        else productDao.findByPackageName(request.projectId, form.packageName)</span>
+
+<span class="nc" id="L53">        productFuture.flatMap {</span>
+<span class="nc bnc" id="L54" title="All 2 branches missed.">          case Some(product) =&gt; pushApiService.createPushApiMessage(form, request, product)</span>
+<span class="nc" id="L55">          case _ =&gt; Future.successful(ApiErrorResponse.PRODUCT_NOT_FOUND.notFound)</span>
+        }
+      })
+  }
+
+<span class="nc" id="L60">  def createInAppMessage(projectUid: String) = Actions(projectUid, parse.json).async(parse.tolerantJson) { implicit request =&gt;</span>
+<span class="nc" id="L61">    request.body.validate[InAppMessageAPIForm].fold(</span>
+<span class="nc" id="L62">      errors =&gt; Future.successful(ApiErrorResponse.jsonBadRequest(errors)),</span>
+<span class="nc" id="L63">      form =&gt; {</span>
+<span class="nc" id="L64">        val realAudienceType = apiFormHandler.extraAudienceType(form.audience)</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        if (realAudienceType.isEmpty) {</span>
+<span class="nc" id="L66">          Future.successful(ApiErrorResponse.EMPTY_AUDIENCE.badRequest)</span>
+        } else {
+<span class="nc" id="L68">          val project = request.project</span>
+<span class="nc" id="L69">          val user = request.authentication.userId.getOrElse(-1)</span>
+<span class="nc" id="L70">          val futureMessageForm = convertForm(form, realAudienceType, project)</span>
+
+          for {
+<span class="nc" id="L73">            messageForm &lt;- futureMessageForm</span>
+<span class="nc" id="L74">            r &lt;- pushMessageService.create(messageForm, project, user)</span>
+          } yield {
+<span class="nc bnc" id="L76" title="All 2 branches missed.">            if (r.message.isActive) {</span>
+<span class="nc" id="L77">              trackingManager.trackingPopupActive(r.message, r.rules.headOption, &quot;直接上线&quot;)</span>
+            }
+<span class="nc" id="L79">            Ok(Json.toJson(r.toPresenter))</span>
+          }
+        }
+      })
+  }
+
+<span class="nc" id="L85">  def updateInAppMessage(projectUid: String, messageUid: String) = Actions(projectUid, parse.json).async(parse.tolerantJson) { implicit request =&gt;</span>
+<span class="nc" id="L86">    request.body.validate[InAppMessageAPIForm].fold(</span>
+<span class="nc" id="L87">      errors =&gt; Future.successful(ApiErrorResponse.jsonBadRequest(errors)),</span>
+<span class="nc" id="L88">      form =&gt; {</span>
+<span class="nc" id="L89">        val realAudienceType = apiFormHandler.extraAudienceType(form.audience)</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (realAudienceType.isEmpty) {</span>
+<span class="nc" id="L91">          Future.successful(ApiErrorResponse.EMPTY_AUDIENCE.badRequest)</span>
+        } else {
+<span class="nc" id="L93">          val project = request.project</span>
+<span class="nc" id="L94">          val user = request.authentication.userId.getOrElse(-1)</span>
+<span class="nc" id="L95">          val futureMessageForm = convertForm(form, realAudienceType, project)</span>
+
+          for {
+<span class="nc" id="L98">            messageForm &lt;- futureMessageForm</span>
+<span class="nc" id="L99">            r &lt;- pushMessageService.update(messageForm, messageUid.toId, project, user)</span>
+          } yield {
+<span class="nc bnc" id="L101" title="All 2 branches missed.">            if (r.message.isActive) {</span>
+<span class="nc" id="L102">              trackingManager.trackingPopupActive(r.message, r.rules.headOption, r.from)</span>
+            }
+<span class="nc" id="L104">            Ok(Json.toJson(r.toPresenter))</span>
+          }
+        }
+      })
+  }
+
+<span class="nc" id="L110">  def deleteInAppMessage(projectUid: String, id: String) = Actions(projectUid, parse.empty).async(parse.empty) { implicit request ⇒</span>
+<span class="nc" id="L111">    implicit val locale: Locale = request.locale</span>
+<span class="nc" id="L112">    val user = request.authentication.userId.getOrElse(-1)</span>
+<span class="nc" id="L113">    pushMessageService.deleteById(projectUid.toId, id.toId, user).map(_ =&gt; NoContent)</span>
+  }
+
+<span class="nc" id="L116">  def indexInAppMessage(projectUid: String) = Actions(projectUid, parse.empty).async(parse.empty) { implicit request =&gt;</span>
+<span class="nc" id="L117">    pushMessageService.findByProject(request.projectId).map { messages =&gt;</span>
+<span class="nc" id="L118">      Ok(Json.toJson(messages.map(_.toPresenter)))</span>
+    }
+  }
+
+  // upload file
+<span class="nc" id="L123">  def uploadMedias(projectUid: String) = Actions(projectUid, parse.json).async(parse.tolerantJson) { implicit request =&gt;</span>
+<span class="nc" id="L124">    request.body.validate[MediaForm].fold(</span>
+<span class="nc" id="L125">      errors =&gt; Future.successful(ApiErrorResponse.jsonBadRequest(errors)),</span>
+<span class="nc" id="L126">      form =&gt; {</span>
+<span class="nc" id="L127">        messageContentHandler.handleUpload(request.project, form)</span>
+      })
+  }
+
+  private def convertForm(form: InAppMessageAPIForm, realAudienceType: Option[AudienceType], project: Project) = {
+    val futureMessageForm = for {
+<span class="nc" id="L133">      realAudienceId &lt;- apiFormHandler.extraAudienceId(project.dbid, realAudienceType.get, form.audience)</span>
+<span class="nc" id="L134">      targets &lt;- apiFormHandler.extraTargetMap(project.dbid, form.rule.targets)</span>
+    } yield {
+<span class="nc" id="L136">      val realContent = PushContent.SimpleImgPushContent(form.content, targets)</span>
+<span class="nc" id="L137">      form.convertToPushMessageForm(realAudienceType, realAudienceId, realContent)</span>
+    }
+<span class="nc" id="L139">    futureMessageForm</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

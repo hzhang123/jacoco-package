@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PushDeviceService.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">service</a> &gt; <span class="el_source">PushDeviceService.scala</span></div><h1>PushDeviceService.scala</h1><pre class="source lang-java linenums">package service
+
+import java.util.Locale
+
+import actors.{ EndpointActor, Injector }
+import actors.protocol.JobProtocols.CheckPointedTasks
+import akka.actor.ActorSystem
+import business.push.PushJobsHandler
+import dao.PushChannelDao
+import form.PushMessageForm
+import cache.RedisCaches
+import dao.PushDeviceDao
+import dtos.{ JobContext, PushDeviceDto, PushTaskDto }
+import form.PushDeviceForm
+import javax.inject.{ Inject, Singleton }
+import org.joda.time.DateTime
+
+import scala.concurrent.Future
+import scala.concurrent.duration._
+import io.growing.micros.play.mvc.FutureUtils
+import io.growing.micros.business.model.Project
+import io.growing.marketing.common.model.PushTask
+import io.growing.marketing.common.model.PushDevice
+import handlers.{ PushMessageHandler, VisitorIdDeviceIdMapper }
+import io.growing.micros.middleware.cache.CacheConfig
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import io.growing.micros.utils.conversion.GrowingConversions._
+
+@Singleton
+<span class="pc" id="L31">class PushDeviceService @Inject() (</span>
+  actorSystem: ActorSystem,
+<span class="fc" id="L33">  visitorIdDeviceIdMapper: VisitorIdDeviceIdMapper,</span>
+  injector: Injector,
+<span class="fc" id="L35">  pushJobsHandler: PushJobsHandler,</span>
+<span class="fc" id="L36">  pushMessageHandler: PushMessageHandler,</span>
+<span class="fc" id="L37">  pushChannelDao: PushChannelDao,</span>
+<span class="fc" id="L38">  pushDeviceDao: PushDeviceDao) extends FutureUtils {</span>
+
+<span class="nc bnc" id="L40" title="All 4 branches missed.">  private lazy val pushDeviceDTOCache = RedisCaches.newRedisCache[String](CacheConfig(&quot;pushDeviceDTOCache&quot;, Some(2.minutes.toSeconds)))</span>
+
+  def findByProject(projectId: Int): Future[List[PushDeviceDto]] = {
+<span class="nc" id="L43">    pushDeviceDao.findByProject(projectId).flatMap(device =&gt;</span>
+<span class="nc" id="L44">      Future.traverse(device) { device =&gt;</span>
+<span class="nc" id="L45">        Future.successful(PushDeviceDto(device))</span>
+      })
+  }
+
+  def create(pushDeviceForm: PushDeviceForm, projectId: Int, userId: Int): Future[Either[String, PushDeviceDto]] = {
+<span class="nc" id="L50">    pushDeviceDao.findByName(projectId, pushDeviceForm.name).flatMap {</span>
+<span class="nc bnc" id="L51" title="All 2 branches missed.">      case Some(pushDevice) =&gt; Future.successful(Left(s&quot;${pushDevice.name}已经存在&quot;))</span>
+      case _ =&gt;
+<span class="nc" id="L53">        val tempDevice = buildDevice(projectId, pushDeviceForm, userId)</span>
+<span class="nc" id="L54">        pushDeviceDao.insert(Seq(tempDevice)).flatMap { devices =&gt;</span>
+<span class="nc" id="L55">          Future.successful(Right(PushDeviceDto(devices.head)))</span>
+        }
+    }
+  }
+
+  def update(pushDeviceForm: PushDeviceForm, projectId: Int, id: Int, userId: Int)(implicit locale: Locale): Future[Either[String, PushDeviceDto]] = {
+<span class="nc" id="L61">    pushDeviceDao.findByNameInOthers(projectId, id, pushDeviceForm.name).flatMap {</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">      case Some(pushDevice) =&gt; Future.successful(Left(s&quot;${pushDevice.name}已经存在&quot;))</span>
+<span class="nc" id="L63">      case _ =&gt; pushDeviceDao.findById(projectId, id).flatMap {</span>
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        case None =&gt; Future.successful(Left(&quot;not found&quot;))</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">        case Some(device) =&gt;</span>
+<span class="nc" id="L66">          val newDevice = copyNewDevice(device, pushDeviceForm, userId)</span>
+<span class="nc" id="L67">          pushDeviceDao.update(projectId, id, newDevice)</span>
+<span class="nc" id="L68">          Future.successful(Right(PushDeviceDto(newDevice)))</span>
+      }
+    }
+  }
+
+  def preview(form: PushMessageForm, deviceId: Int, project: Project, userId: Int): Future[_] = {
+<span class="nc" id="L74">    val filter = pushMessageHandler.convertFormToFilter(form.audienceFilter)</span>
+    // 预览的时候没有 message id 赋值一个 fake id
+<span class="nc" id="L76">    val message = form.buildMessage(project.dbid, project.keyid, None, userId, userId, filter).copy(id = Some(-1))</span>
+    for {
+<span class="nc bnc" id="L78" title="All 2 branches missed.">      maybeDevice &lt;- pushDeviceDao.findById(project.dbid, deviceId)</span>
+<span class="nc" id="L79">      device = maybeDevice.get</span>
+<span class="nc" id="L80">      products &lt;- pushMessageHandler.getProductsFromRuleForm(project.dbid, form.rule.get, form.platform)</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">      maybeChannel &lt;- pushChannelDao.findByProductAndName(project.dbid, device.productId, device.channelName)</span>
+<span class="nc" id="L82">      channel = maybeChannel.getOrElse(throw new Exception(&quot;channel not found&quot;))</span>
+    } yield {
+<span class="nc" id="L84">      val rules = pushMessageHandler.buildRulesFromForm(form, products, message)</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">      val maybeRule = rules.find(_.productId.get == device.productId)</span>
+<span class="nc" id="L86">      visitorIdDeviceIdMapper.insert(Map(device.regId -&gt; device.deviceId)) // push token -&gt; u</span>
+<span class="nc" id="L87">      pushJobsHandler.publishPushJobByTokens(message, maybeRule.get, channel, List(device.regId))</span>
+    }
+  }
+
+<span class="nc" id="L91">  def archive(projectId: Int, id: Int): Future[Int] = pushDeviceDao.deleteById(projectId, id)</span>
+
+  private[this] def buildDevice(projectId: Int, pushDeviceForm: PushDeviceForm, userId: Int): PushDevice = {
+<span class="nc" id="L94">    PushDevice(</span>
+<span class="nc" id="L95">      None,</span>
+<span class="nc" id="L96">      projectId,</span>
+<span class="nc" id="L97">      pushDeviceForm.name,</span>
+<span class="nc" id="L98">      pushDeviceForm.productId.toId,</span>
+<span class="nc" id="L99">      pushDeviceForm.platform,</span>
+<span class="nc" id="L100">      pushDeviceForm.brand,</span>
+<span class="nc" id="L101">      pushDeviceForm.channelId.map(_.toId),</span>
+<span class="nc" id="L102">      pushDeviceForm.channelName,</span>
+<span class="nc" id="L103">      pushDeviceForm.sdkVersion,</span>
+<span class="nc" id="L104">      pushDeviceForm.appVersion,</span>
+<span class="nc" id="L105">      pushDeviceForm.deviceId,</span>
+<span class="nc" id="L106">      pushDeviceForm.regId,</span>
+<span class="nc" id="L107">      userId,</span>
+<span class="nc" id="L108">      userId)</span>
+  }
+
+  private[this] def copyNewDevice(device: PushDevice, f: PushDeviceForm, userId: Int): PushDevice = {
+<span class="nc" id="L112">    device.copy(</span>
+<span class="nc" id="L113">      name = f.name,</span>
+<span class="nc" id="L114">      platform = f.platform,</span>
+<span class="nc" id="L115">      brand = f.brand,</span>
+<span class="nc" id="L116">      channelId = f.channelId.map(_.toId),</span>
+<span class="nc" id="L117">      sdkVersion = f.sdkVersion,</span>
+<span class="nc" id="L118">      appVersion = f.appVersion,</span>
+<span class="nc" id="L119">      deviceId = f.deviceId,</span>
+<span class="nc" id="L120">      regId = f.regId,</span>
+<span class="nc" id="L121">      updatedAt = DateTime.now(),</span>
+<span class="nc" id="L122">      updaterId = userId)</span>
+  }
+
+  def getPushDeviceByToken(projectUid: String, token: String): Future[Option[String]] = {
+<span class="nc" id="L126">    pushDeviceDTOCache.get(generatePushDeviceKey(projectUid, token))</span>
+  }
+
+  private def generatePushDeviceKey(projectUid: String, token: String): String = {
+<span class="nc" id="L130">    s&quot;$projectUid$token&quot;</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AppMessageContext.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">model.context</a> &gt; <span class="el_source">AppMessageContext.scala</span></div><h1>AppMessageContext.scala</h1><pre class="source lang-java linenums">package model.context
+
+import dtos.{ PushMessageDto, UserInfo }
+import form.PushMessageForm
+import io.growing.marketing.common.model.{ PushMessage, PushMetrics, PushRule }
+import io.growing.micros.business.model.Project
+
+/**
+ * AppMessageContext
+ *
+ * @author damon lin
+ *         2019/11/7
+ */
+<span class="nc bnc" id="L14" title="All 73 branches missed.">final case class AppMessageContext(</span>
+<span class="nc" id="L15">  userId: Int,</span>
+<span class="nc" id="L16">  project: Project,</span>
+<span class="nc" id="L17">  override val form: PushMessageForm,</span>
+<span class="nc" id="L18">  override val message: Option[PushMessage] = None,</span>
+<span class="nc" id="L19">  override val rules: Option[List[PushRule]] = None,</span>
+<span class="nc" id="L20">  override val metrics: Option[PushMetrics] = None,</span>
+<span class="nc" id="L21">  override val firstUpdateToActivated: Boolean = false,</span>
+<span class="nc" id="L22">  override val from: String = &quot;&quot;,</span>
+<span class="nc" id="L23">  override val users: List[UserInfo] = List.empty,</span>
+<span class="nc" id="L24">  override val apnsProd: Boolean = true) extends MessageContext {</span>
+
+<span class="nc" id="L26">  override def getMessage: PushMessage = this.message.get</span>
+
+<span class="nc" id="L28">  override def parameters: (PushMessageForm, Project, Int) = (this.form, this.project, this.userId)</span>
+
+  override def toPresenter: PushMessageDto = {
+<span class="nc" id="L31">    PushMessageDto(getMessage, getRules, Some(getMetrics), form.audienceFilter)</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

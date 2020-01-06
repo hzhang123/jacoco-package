@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BaseMessageForm.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">form</a> &gt; <span class="el_source">BaseMessageForm.scala</span></div><h1>BaseMessageForm.scala</h1><pre class="source lang-java linenums">package form
+
+import io.growing.marketing.common.model.AudienceType.AudienceType
+import io.growing.marketing.common.model.PushContent
+import io.growing.marketing.common.model.components.{ Button, Img }
+import io.growing.micros.business.model.Status
+import io.growing.micros.business.model.Status.Status
+
+<span class="nc" id="L9">trait BaseMessageForm {</span>
+  val state: Option[Status]
+  val audienceType: Option[AudienceType]
+  val audienceId: Option[String]
+  val audienceFilter: Option[PushFilterForm]
+  val rule: Option[PushRuleForm]
+  val content: Option[PushContent]
+
+  def isActivate: Boolean = {
+<span class="nc" id="L18">    state.contains(Status.activated)</span>
+  }
+
+  def isPlanning: Boolean = {
+<span class="nc" id="L22">    state.contains(Status.planning)</span>
+  }
+
+  def isDraft: Boolean = {
+<span class="nc" id="L26">    state.contains(Status.draft)</span>
+  }
+
+  def isStop: Boolean = {
+<span class="nc" id="L30">    state.contains(Status.stop)</span>
+  }
+
+  def getPushContentTarget: Seq[String] = {
+<span class="nc" id="L34">    this.content match {</span>
+<span class="nc bnc" id="L35" title="All 2 branches missed.">      case Some(pushContent) =&gt; pushContent.components.flatMap {</span>
+<span class="nc bnc" id="L36" title="All 2 branches missed.">        case c: Img =&gt; c.config.target.map(t =&gt; t.values.toSeq).getOrElse(Seq())</span>
+<span class="nc bnc" id="L37" title="All 2 branches missed.">        case c: Button =&gt; c.config.target.map(t =&gt; t.values.toSeq).getOrElse(Seq())</span>
+<span class="nc" id="L38">        case _ =&gt; Seq()</span>
+      }
+<span class="nc bnc" id="L40" title="All 2 branches missed.">      case None =&gt; Seq()</span>
+    }
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

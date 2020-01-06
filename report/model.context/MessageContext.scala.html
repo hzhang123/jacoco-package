@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageContext.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">model.context</a> &gt; <span class="el_source">MessageContext.scala</span></div><h1>MessageContext.scala</h1><pre class="source lang-java linenums">package model.context
+
+import dtos.{ PushMessageDto, UserInfo }
+import form.{ BaseMessageForm, PushFilterForm }
+import io.growing.marketing.common.model.{ BaseMessage, PushMetrics, PushRule }
+import io.growing.micros.business.model.Project
+
+/**
+ * MessageContext
+ *
+ * @author damon lin
+ *         2019/11/6
+ */
+<span class="nc" id="L14">trait MessageContext {</span>
+
+  val userId: Int
+  val project: Project
+  val form: BaseMessageForm
+<span class="nc" id="L19">  val message: Option[BaseMessage] = None</span>
+<span class="nc" id="L20">  val rules: Option[List[PushRule]] = None</span>
+<span class="nc" id="L21">  val metrics: Option[PushMetrics] = None</span>
+  val firstUpdateToActivated: Boolean
+  val from: String
+<span class="nc" id="L24">  val users: List[UserInfo] = List.empty</span>
+<span class="nc" id="L25">  val apnsProd: Boolean = true</span>
+
+<span class="nc" id="L27">  def getMessage: BaseMessage = this.message.get</span>
+<span class="nc" id="L28">  def audienceFilter: Option[PushFilterForm] = this.form.audienceFilter</span>
+<span class="nc" id="L29">  def getRules: List[PushRule] = this.rules.get</span>
+<span class="nc" id="L30">  def getMetrics: PushMetrics = this.metrics.get</span>
+
+<span class="nc" id="L32">  def parameters: (BaseMessageForm, Project, Int) = (this.form, this.project, this.userId)</span>
+
+  def toPresenter: PushMessageDto
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

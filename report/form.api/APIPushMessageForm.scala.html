@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>APIPushMessageForm.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">form.api</a> &gt; <span class="el_source">APIPushMessageForm.scala</span></div><h1>APIPushMessageForm.scala</h1><pre class="source lang-java linenums">package form.api
+
+import form.{ PushFilterForm, PushMessageForm, PushRuleForm, PushRuleTarget }
+import io.growing.marketing.common.model.components.{ Caption, Paragraph }
+import io.growing.marketing.common.model._
+import io.growing.micros.business.model.{ Product, Status }
+import io.growing.micros.utils.Default
+import model.Statics
+import play.api.libs.functional.syntax._
+import play.api.libs.json.Reads.{ filter, _ }
+import play.api.libs.json._
+import utils.ConfigParams
+
+/**
+ * APIPushMessageForm
+ *
+ * @author damon lin
+ *         2019/7/18
+ */
+
+<span class="nc bnc" id="L21" title="All 18 branches missed.">case class PushOption(</span>
+<span class="nc" id="L22">  apnsProduction: Boolean)</span>
+
+<span class="nc" id="L24">object PushOption {</span>
+<span class="nc bnc" id="L25" title="All 2 branches missed.">  implicit val fmt = Json.format[PushOption]</span>
+}
+
+<span class="nc bnc" id="L28" title="All 55 branches missed.">case class Notification(</span>
+<span class="nc" id="L29">  title: String,</span>
+<span class="nc" id="L30">  alert: String,</span>
+<span class="nc" id="L31">  extras: Map[String, String],</span>
+<span class="nc" id="L32">  actionType: String,</span>
+<span class="nc" id="L33">  actionTarget: String,</span>
+<span class="nc" id="L34">  actionParameters: Map[String, String]) {</span>
+
+  def genContent: PushContent = {
+<span class="nc" id="L37">    PushContent(</span>
+<span class="nc" id="L38">      Json.obj(),</span>
+<span class="nc" id="L39">      List(Caption.pushTitle(title), Paragraph.pushContent(alert)),</span>
+<span class="nc" id="L40">      None)</span>
+  }
+
+  def genPushRule(product: Product): PushRuleForm = {
+<span class="nc" id="L44">    val target = PushRuleTarget(</span>
+<span class="nc" id="L45">      product.uid,</span>
+<span class="nc" id="L46">      actionType,</span>
+<span class="nc" id="L47">      actionTarget,</span>
+<span class="nc" id="L48">      actionParameters)</span>
+<span class="nc" id="L49">    PushRuleForm(</span>
+<span class="nc" id="L50">      Some(PushRuleType.Custom),</span>
+<span class="nc" id="L51">      action = Some(&quot;pageOpen&quot;),</span>
+<span class="nc" id="L52">      Some(TriggerFilter(&quot;&quot;, Seq.empty)),</span>
+<span class="nc" id="L53">      targets = Some(List(target)),</span>
+<span class="nc" id="L54">      limit = Some(1),</span>
+<span class="nc" id="L55">      None,</span>
+<span class="nc" id="L56">      None,</span>
+<span class="nc" id="L57">      Some(Statics.RULE_DEFAULT_START_AT),</span>
+<span class="nc" id="L58">      Some(Statics.RULE_DEFAULT_END_AT),</span>
+<span class="nc" id="L59">      None,</span>
+<span class="nc" id="L60">      Some(86400),</span>
+<span class="nc" id="L61">      productIds = Some(List(product.uid)),</span>
+<span class="nc" id="L62">      None)</span>
+  }
+}
+
+<span class="nc" id="L66">object Notification {</span>
+
+<span class="nc bnc" id="L68" title="All 4 branches missed.">  private[this] lazy val configParams = Default.injector.instanceOf[ConfigParams]</span>
+<span class="nc bnc" id="L69" title="All 4 branches missed.">  private[this] lazy val captionLimit = configParams.pushMessageCaptionLimit</span>
+<span class="nc bnc" id="L70" title="All 4 branches missed.">  private[this] lazy val paragraphLimit = configParams.pushMessageParagraphLimit</span>
+
+<span class="nc" id="L72">  implicit val reads: Reads[Notification] = (</span>
+<span class="nc bnc" id="L73" title="All 4 branches missed.">    (JsPath \ &quot;title&quot;).read[String](filter[String](JsonValidationError(s&quot;标题不能为空且长度不能超过 $captionLimit 个字符&quot;))(name =&gt; name.nonEmpty &amp;&amp; name.length &lt;= captionLimit)) and</span>
+<span class="nc bnc" id="L74" title="All 4 branches missed.">    (JsPath \ &quot;alert&quot;).read[String](filter[String](JsonValidationError(s&quot;内容不能为空且长度不能超过 $paragraphLimit 个字符&quot;))(name =&gt; name.nonEmpty &amp;&amp; name.length &lt;= paragraphLimit)) and</span>
+<span class="nc" id="L75">    (JsPath \ &quot;extras&quot;).read[Map[String, String]] and</span>
+<span class="nc" id="L76">    (JsPath \ &quot;actionType&quot;).read[String] and</span>
+<span class="nc" id="L77">    (JsPath \ &quot;actionTarget&quot;).read[String] and</span>
+<span class="nc" id="L78">    (JsPath \ &quot;actionParameters&quot;).read[Map[String, String]])(Notification.apply _)</span>
+}
+
+<span class="nc bnc" id="L81" title="All 62 branches missed.">case class APIPushMessageForm(</span>
+<span class="nc" id="L82">  cid: String,</span>
+<span class="nc" id="L83">  name: String,</span>
+<span class="nc" id="L84">  packageName: String,</span>
+  /*
+  之前通过包名找product,在多产品包名一样的情况下可能会找到多个产品,新增productId,可准确定位到某一个product,
+  为了保证接口兼容性，先设计成Option，后续如果API接口升版本了，将productId改成必传，废弃packageName字段
+   */
+<span class="nc" id="L89">  productId: Option[String],</span>
+<span class="nc" id="L90">  audience: List[String],</span>
+<span class="nc" id="L91">  options: PushOption,</span>
+<span class="nc" id="L92">  notification: Notification) extends APIForm {</span>
+
+  def convertToPushMessageForm(product: Product): PushMessageForm = {
+<span class="nc" id="L95">    val ruleForm = notification.genPushRule(product)</span>
+<span class="nc" id="L96">    val content = notification.genContent</span>
+<span class="nc" id="L97">    PushMessageForm(</span>
+<span class="nc" id="L98">      name = name,</span>
+<span class="nc" id="L99">      `type` = MessageType.push,</span>
+<span class="nc" id="L100">      state = Some(Status.activated),</span>
+<span class="nc" id="L101">      platform = MessagePlatform.App,</span>
+<span class="nc" id="L102">      audienceType = Some(AudienceType.Segment),</span>
+<span class="nc" id="L103">      audienceId = None,</span>
+<span class="nc" id="L104">      campaign = None,</span>
+<span class="nc" id="L105">      priority = None,</span>
+<span class="nc" id="L106">      rule = Some(ruleForm),</span>
+<span class="nc" id="L107">      content = Some(content),</span>
+<span class="nc" id="L108">      audienceFilter = Some(PushFilterForm(&quot;&quot;, Seq())))</span>
+  }
+
+}
+
+<span class="nc" id="L113">object APIPushMessageForm {</span>
+<span class="nc" id="L114">  implicit val reads: Reads[APIPushMessageForm] = (</span>
+<span class="nc bnc" id="L115" title="All 4 branches missed.">    (JsPath \ &quot;cid&quot;).read[String](filter[String](JsonValidationError(&quot;cid 不能为空且长度不能超过 64 个字符&quot;))(name =&gt; name.nonEmpty &amp;&amp; name.length &lt; 64)) and</span>
+<span class="nc bnc" id="L116" title="All 4 branches missed.">    (JsPath \ &quot;name&quot;).read[String](filter[String](JsonValidationError(&quot;消息名称不能为空且长度不能超过 200 个字符&quot;))(name =&gt; name.nonEmpty &amp;&amp; name.length &lt; 200)) and</span>
+<span class="nc" id="L117">    (JsPath \ &quot;packageName&quot;).read[String] and</span>
+<span class="nc" id="L118">    (JsPath \ &quot;productId&quot;).readNullable[String] and</span>
+<span class="nc bnc" id="L119" title="All 4 branches missed.">    (JsPath \ &quot;audience&quot;).read[List[String]](filter[List[String]](JsonValidationError(&quot;推送目标列表不能为空且长度不能超过 2000&quot;))(audience =&gt; audience.nonEmpty &amp;&amp; audience.length &lt;= 2000)) and</span>
+<span class="nc" id="L120">    (JsPath \ &quot;options&quot;).read[PushOption] and</span>
+<span class="nc" id="L121">    (JsPath \ &quot;notification&quot;).read[Notification])(APIPushMessageForm.apply _)</span>
+}
+<span class="nc" id="L123"></span>
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

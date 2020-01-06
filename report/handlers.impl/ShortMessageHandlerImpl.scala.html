@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShortMessageHandlerImpl.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">handlers.impl</a> &gt; <span class="el_source">ShortMessageHandlerImpl.scala</span></div><h1>ShortMessageHandlerImpl.scala</h1><pre class="source lang-java linenums">package handlers.impl
+
+import java.util.regex.Pattern
+
+import com.google.gson.Gson
+import com.typesafe.config.Config
+import com.typesafe.scalalogging.LazyLogging
+import dao.{ SegmentationDao, SmsConfigDao }
+import dtos.Messages
+import dtos.Messages.SmsSubTask
+import form.ShortMessageForm
+import handlers.{ AliyunSmsHandler, ShortMessageHandler }
+import infrastructure.kafka.KafkaCommonClient
+import infrastructure.rpc.SmsQueryUsersClient
+import io.growing.marketing.common.model.{ ShortMessage, SmsConfig, SmsProvider }
+import io.growing.micros.play.exception.BadRequestException
+import io.growing.micros.play.mvc.FutureUtils
+import io.growing.micros.utils.conversion.GrowingConversions._
+import io.growing.micros.utils.time.DateTimeUtil.UTCNow
+import javax.inject.{ Inject, Singleton }
+import model.Statics
+import org.joda.time.{ DateTime, DateTimeZone }
+import utils.{ ChuangLanHttpClient, ConfigParams }
+
+import scala.collection.mutable.ListBuffer
+import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+@Singleton
+<span class="pc bnc" id="L31" title="All 4 branches missed.">class ShortMessageHandlerImpl @Inject() (</span>
+<span class="fc" id="L32">  smsConfigDao: SmsConfigDao,</span>
+<span class="fc" id="L33">  segmentationDao: SegmentationDao,</span>
+<span class="fc" id="L34">  aliyunSmsHandler: AliyunSmsHandler,</span>
+<span class="fc" id="L35">  yunpianSmsHandler: YunpianSmsHandlerImpl,</span>
+  smsQueryUsersClient: SmsQueryUsersClient,
+  configParams: ConfigParams,
+<span class="fc" id="L38">  config: Config) extends ShortMessageHandler with FutureUtils with LazyLogging {</span>
+
+<span class="pc" id="L40">  private val kafkaClient = KafkaCommonClient[SmsSubTask](Statics.TOPIC_SMS_TASK, config)</span>
+
+  def sendTestShortMessage(msg: ShortMessage): Future[Either[String, String]] = {
+    for {
+<span class="nc bnc" id="L44" title="All 2 branches missed.">      configOpt &lt;- smsConfigDao.findByConfigId(msg.configId)</span>
+<span class="nc" id="L45">      config = configOpt.get</span>
+    } yield {
+<span class="nc" id="L47">      config.smsProvider match {</span>
+<span class="nc bnc" id="L48" title="All 6 branches missed.">        case SmsProvider.aliyun =&gt;</span>
+<span class="nc" id="L49">          aliyunSmsHandler.sendSingleMessage(msg, msg.testPhoneNum.getOrElse(&quot;&quot;), config)</span>
+<span class="nc bnc" id="L50" title="All 6 branches missed.">        case SmsProvider.yunpian =&gt;</span>
+<span class="nc" id="L51">          yunpianSmsHandler.sendSingleMessage(msg, msg.testPhoneNum.getOrElse(&quot;&quot;), config)</span>
+<span class="nc bnc" id="L52" title="All 6 branches missed.">        case SmsProvider.chuanglan =&gt;</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">          val sendPath = if (getTemplateParams(msg.templateContent.getOrElse(&quot;&quot;), config).nonEmpty) {</span>
+<span class="nc" id="L54">            s&quot;http://${config.sendPath.getOrElse(&quot;&quot;)}/msg/variable/json&quot;</span>
+          } else {
+<span class="nc" id="L56">            s&quot;http://${config.sendPath.getOrElse(&quot;&quot;)}/msg/send/json&quot;</span>
+          }
+<span class="nc" id="L58">          sendChuanglanSingleMessage(sendPath, buildChuanglanParams(msg, config, sendPath))</span>
+      }
+    }
+  }
+
+  private def buildChuanglanParams(msg: ShortMessage, config: SmsConfig, sendPath: String) = {
+<span class="nc" id="L64">    val temp = sendPath.split(&quot;/&quot;)</span>
+<span class="nc bnc" id="L65" title="All 2 branches missed.">    val tuple: (String, String) = if (temp(temp.size - 2).equals(&quot;send&quot;)) {</span>
+<span class="nc" id="L66">      &quot;phone&quot; -&gt; msg.testPhoneNum.getOrElse(&quot;&quot;)</span>
+    } else {
+<span class="nc" id="L68">      &quot;params&quot; -&gt; (msg.testPhoneNum.getOrElse(&quot;&quot;) :: msg.testValues).mkString(&quot;,&quot;)</span>
+    }
+<span class="nc" id="L70">    Map(</span>
+<span class="nc" id="L71">      tuple,</span>
+<span class="nc" id="L72">      &quot;account&quot; -&gt; config.providerKey,</span>
+<span class="nc" id="L73">      &quot;password&quot; -&gt; config.providerValue.getOrElse(&quot;&quot;),</span>
+<span class="nc" id="L74">      &quot;msg&quot; -&gt; msg.templateContent.getOrElse(&quot;&quot;))</span>
+  }
+
+  private def sendChuanglanSingleMessage(sendPath: String, params: Map[String, String]) = {
+<span class="nc" id="L78">    ChuangLanHttpClient.sendShortMessage(sendPath, new Gson().toJson(params.asJava)) match {</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">      case &quot;send failed&quot; =&gt; Left(&quot;send failed&quot;)</span>
+<span class="nc" id="L80">      case _ =&gt; Right(&quot;&quot;)</span>
+    }
+  }
+
+  def sendActivatedShortMessages(msg: ShortMessage, ai: String): Future[String] = {
+
+    def buildAttributes(config: SmsConfig) = {
+<span class="nc" id="L87">      val attrList = new ListBuffer[String]</span>
+<span class="nc" id="L88">      attrList.append(config.numAttribute.get)</span>
+<span class="nc" id="L89">      msg.segAttrs.foreach(attrList.append(_))</span>
+<span class="nc" id="L90">      attrList</span>
+    }
+
+    for {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">      configOpt &lt;- smsConfigDao.findByConfigId(msg.configId)</span>
+<span class="nc" id="L95">      config = configOpt.get</span>
+<span class="nc" id="L96">      audienceId = msg.audienceId.getOrElse(&quot;uv:1&quot;).split(&quot;:&quot;)</span>
+<span class="nc bnc" id="L97" title="All 2 branches missed.">      maybeSegmentation &lt;- segmentationDao.findById(msg.projectId, audienceId(1).toId)</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">      field = if (audienceId(0).equals(&quot;uv&quot;)) &quot;u&quot; else &quot;cs1&quot;</span>
+<span class="nc" id="L99">      tagId = audienceId(1).toId.toString</span>
+<span class="nc" id="L100">      attrList = buildAttributes(config)</span>
+<span class="nc bnc" id="L101" title="All 4 branches missed.">      illegalLoginUsersQuery = field.equals(&quot;cs1&quot;) &amp;&amp; attrList.count(_.slice(0, 4).equals(&quot;vstr&quot;)) != 0</span>
+<span class="nc bnc" id="L102" title="All 4 branches missed.">      illegalVisitorsQuery = field.equals(&quot;u&quot;) &amp;&amp; attrList.count(_.slice(0, 3).equals(&quot;ppl&quot;)) != 0</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">      _ &lt;- failCondition(</span>
+<span class="nc bnc" id="L104" title="All 4 branches missed.">        illegalLoginUsersQuery || illegalVisitorsQuery,</span>
+<span class="nc" id="L105">        BadRequestException(&quot;不允许同时查询登录用户变量和访问用户变量&quot;))</span>
+<span class="nc" id="L106">      userAmount = maybeSegmentation.map(s =&gt; s.userNum.getOrElse(0)).getOrElse(0)</span>
+<span class="nc" id="L107">      _ = cutSmsIntoSubTask(ai, tagId, field, userAmount, attrList.mkString(&quot;,&quot;), msg.dbid, config.dbid)</span>
+<span class="nc" id="L108">    } yield &quot;&quot;</span>
+  }
+
+  /**
+   * 单个实例收到将短信请求后,以100为单位分割成小的task发送给kafka.再由集群消费并行查询qs加快处理.
+   */
+  private def cutSmsIntoSubTask(ai: String, tagId: String, field: String, userAmount: Int,
+    attrs: String, shortMsgId: Int, smsConfigId: Int) = {
+
+<span class="nc" id="L117">    val DEFAULT_USERS_AMOUNT = 100</span>
+<span class="nc" id="L118">    (0 to userAmount by DEFAULT_USERS_AMOUNT).map(i =&gt; (i, i + DEFAULT_USERS_AMOUNT)).map { t =&gt;</span>
+<span class="nc" id="L119">      val kafkaMsg = Messages.SmsSubTask.newBuilder()</span>
+<span class="nc" id="L120">        .setAi(ai)</span>
+<span class="nc" id="L121">        .setTagId(tagId)</span>
+<span class="nc" id="L122">        .setField(field)</span>
+<span class="nc" id="L123">        .setStart(t._1)</span>
+<span class="nc" id="L124">        .setEnd(Math.min(t._2, userAmount))</span>
+<span class="nc" id="L125">        .setAttrs(attrs)</span>
+<span class="nc" id="L126">        .setShortMsgId(shortMsgId)</span>
+<span class="nc" id="L127">        .setSmsConfigId(smsConfigId)</span>
+        .build()
+<span class="nc bnc" id="L129" title="All 2 branches missed.">      logger.info(s&quot;sub task: $kafkaMsg&quot;)</span>
+<span class="nc" id="L130">      kafkaClient.send(kafkaMsg)</span>
+    }
+  }
+
+  def checkPlanningShortMessage(msg: ShortMessage): Future[Option[String]] = {
+    for {
+<span class="nc" id="L136">      _ &lt;- failCondition(msg.ableToPlan.isDefined, BadRequestException(msg.ableToPlan.get))</span>
+<span class="nc bnc" id="L137" title="All 2 branches missed.">      configOpt &lt;- smsConfigDao.findByConfigId(msg.configId)</span>
+<span class="nc" id="L138">      config = configOpt.get</span>
+    } yield {
+<span class="nc" id="L140">      config.smsProvider match {</span>
+<span class="nc bnc" id="L141" title="All 6 branches missed.">        case SmsProvider.aliyun =&gt;</span>
+<span class="nc" id="L142">          aliyunSmsHandler.queryTemplate(msg.templateCode.get, config).fold(l =&gt; Some(l), _ =&gt; None)</span>
+<span class="nc bnc" id="L143" title="All 6 branches missed.">        case SmsProvider.yunpian =&gt;</span>
+<span class="nc" id="L144">          yunpianSmsHandler.queryTemplate(msg.templateCode.get, config).fold(l =&gt; Some(l), _ =&gt; None)</span>
+<span class="nc bnc" id="L145" title="All 6 branches missed.">        case SmsProvider.chuanglan =&gt;</span>
+<span class="nc" id="L146">          None</span>
+      }
+    }
+  }
+
+  def getTemplateParams(templateContent: String, smsConfig: SmsConfig): List[String] = {
+<span class="nc" id="L152">    val regex = smsConfig.smsProvider match {</span>
+<span class="nc bnc" id="L153" title="All 14 branches missed.">      case SmsProvider.aliyun | SmsProvider.chuanglan =&gt; &quot;\\{(.*?)\\}&quot;</span>
+<span class="nc bnc" id="L154" title="All 6 branches missed.">      case SmsProvider.yunpian =&gt; &quot;\\#(.*?)\\#&quot;</span>
+    }
+<span class="nc" id="L156">    val matcher = Pattern.compile(regex).matcher(templateContent)</span>
+<span class="nc" id="L157">    val templateParams = new ListBuffer[String]</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">    while (matcher.find()) {</span>
+<span class="nc" id="L159">      templateParams += templateContent.substring(matcher.start(), matcher.end())</span>
+    }
+<span class="nc" id="L161">    templateParams.toList</span>
+  }
+
+  def updateShortMessage(form: ShortMessageForm, msg: ShortMessage, updaterId: Int): ShortMessage = {
+<span class="nc" id="L165">    val startTime: DateTime = new DateTime(form.startAt).withZone(DateTimeZone.UTC)</span>
+<span class="nc" id="L166">    msg.copy(</span>
+<span class="nc" id="L167">      updaterId = updaterId,</span>
+<span class="nc" id="L168">      name = form.name,</span>
+<span class="nc" id="L169">      configId = form.configId.toId,</span>
+<span class="nc" id="L170">      audienceType = form.audienceType,</span>
+<span class="nc" id="L171">      audienceId = form.audienceId,</span>
+<span class="nc" id="L172">      state = form.state,</span>
+<span class="nc" id="L173">      signName = form.signName,</span>
+<span class="nc" id="L174">      templateCode = form.templateCode,</span>
+<span class="nc" id="L175">      templateContent = form.templateContent,</span>
+<span class="nc" id="L176">      templateParams = form.templateParams,</span>
+<span class="nc" id="L177">      segAttrs = form.segAttrs,</span>
+<span class="nc" id="L178">      testValues = form.testValues,</span>
+<span class="nc" id="L179">      testPhoneNum = form.testPhoneNum,</span>
+<span class="nc" id="L180">      startAt = startTime,</span>
+<span class="nc" id="L181">      updatedAt = UTCNow)</span>
+  }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

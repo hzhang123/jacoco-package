@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InAppMessageHandler.scala</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">JaCoCo Coverage Report</a> &gt; <a href="index.source.html" class="el_package">business.inapp</a> &gt; <span class="el_source">InAppMessageHandler.scala</span></div><h1>InAppMessageHandler.scala</h1><pre class="source lang-java linenums">package business.inapp
+
+import business.BaseMessageHandler
+import com.google.inject.Inject
+import dao.{ PushMessageDao, PushRuleDao }
+import dtos.FlushCacheMessage
+import handlers.{ MessageContentHandler, PushMessageHandler }
+import infrastructure.lock.MessageCacheManager
+import infrastructure.measurement.MessageMeasurementHandler
+import io.growing.marketing.common.model.{ PushMessage, PushMetrics, PushRule }
+import io.growing.micros.business.model.Status
+import io.growing.micros.play.exception.{ BadRequestException, NotFoundException }
+import io.growing.micros.utils.time.DateTimeUtil.UTCNow
+import javax.inject.Singleton
+import model.context.{ AppMessageContext, MessageContext }
+import play.api.libs.json.Json
+import model.Statics.Queue.FLUSH_MESSAGE_CACHE
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+
+/**
+ * InAppMessageHandler
+ *
+ * @author damon lin
+ *         2019/11/7
+ */
+@Singleton
+<span class="nc" id="L29">class InAppMessageHandler @Inject() (</span>
+<span class="nc" id="L30">  messageHandler: PushMessageHandler,</span>
+<span class="nc" id="L31">  metricsHandler: MessageMeasurementHandler,</span>
+<span class="nc" id="L32">  messageContentHandler: MessageContentHandler,</span>
+<span class="nc" id="L33">  pushMessageDao: PushMessageDao,</span>
+<span class="nc" id="L34">  pushRuleDao: PushRuleDao,</span>
+<span class="nc" id="L35">  messageCacheManager: MessageCacheManager) extends BaseMessageHandler[AppMessageContext] {</span>
+
+  override def preCreateHandle(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L38">    val context = shape(c)</span>
+<span class="nc bnc" id="L39" title="All 2 branches missed.">    val (form, project, _) = context.parameters</span>
+    for {
+<span class="nc" id="L41">      _ ← messageHandler.findDuplicatedName(form.name, project.dbid)</span>
+<span class="nc bnc" id="L42" title="All 2 branches missed.">      _ ← messageHandler.validateMessageRunnable(form).fold(e ⇒ Future.failed(BadRequestException(e)), Future.successful)</span>
+<span class="nc" id="L43">      correctForm = messageHandler.adjustMsgForm(form)</span>
+<span class="nc" id="L44">      _ &lt;- messageHandler.determineTimeLegality(correctForm)</span>
+    } yield {
+<span class="nc" id="L46">      context.copy(form = correctForm)</span>
+    }
+  }
+
+  override def handleMetrics(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L51">    val context = shape(c)</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">    val (form, project, userId) = context.parameters</span>
+    for {
+<span class="nc" id="L54">      pushMetrics ← metricsHandler.createMetricsIfNecessary(form.`type`, project, userId)</span>
+    } yield {
+<span class="nc" id="L56">      context.copy(metrics = Some(pushMetrics))</span>
+    }
+  }
+
+  override def insertMessage(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L61">    val context = shape(c)</span>
+<span class="nc bnc" id="L62" title="All 2 branches missed.">    val (form, project, userId) = context.parameters</span>
+<span class="nc" id="L63">    val filter = messageHandler.convertFormToFilter(form.audienceFilter)</span>
+<span class="nc" id="L64">    val tempMessage = form.buildMessage(project.dbid, project.keyid, None, userId, userId, filter)</span>
+    for {
+<span class="nc" id="L66">      message ← pushMessageDao.insert(tempMessage)</span>
+    } yield {
+<span class="nc" id="L68">      context.copy(message = Some(message))</span>
+    }
+  }
+
+  override def createRule(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L73">    val context = shape(c)</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">    val (form, project, _) = context.parameters</span>
+<span class="nc" id="L75">    val message = context.getMessage</span>
+<span class="nc" id="L76">    val pushMetrics = context.getMetrics</span>
+    for {
+<span class="nc" id="L78">      maybeUrl &lt;- messageContentHandler.createOptionUrl(form, message, pushMetrics, project)</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">      products ← messageHandler.getProductsFromRuleForm(project.dbid, form.rule.get, form.platform)</span>
+<span class="nc" id="L80">      rulesToCreate = messageHandler.buildRulesFromForm(form, products, message)</span>
+<span class="nc" id="L81">      newMessage = message.copy(contentUrl = maybeUrl, metricsRef = pushMetrics.dbid)</span>
+<span class="nc" id="L82">      _ ← updateMessageAndRules(newMessage, rulesToCreate)</span>
+    } yield {
+<span class="nc" id="L84">      context.copy(message = Some(newMessage), rules = Some(rulesToCreate.toList))</span>
+    }
+  }
+
+  override def afterCreateHandle(c: MessageContext): Future[AppMessageContext] = {
+<span class="nc" id="L89">    val context = shape(c)</span>
+<span class="nc" id="L90">    val message = context.getMessage</span>
+<span class="nc" id="L91">    val rules = context.getRules</span>
+<span class="nc" id="L92">    val form = context.form</span>
+    for {
+<span class="nc" id="L94">      _ ← messageCacheManager.sendMessage(FLUSH_MESSAGE_CACHE, Json.toJson(FlushCacheMessage(message.ai, rules.map(_.urlScheme))).toString())</span>
+<span class="nc" id="L95">    } yield context.asInstanceOf[AppMessageContext]</span>
+  }
+
+  // ================================= update ==========================
+
+  override def preUpdateHandle(c: MessageContext, id: Int): Future[MessageContext] = {
+<span class="nc" id="L101">    val context = shape(c)</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">    val (form, project, _) = context.parameters</span>
+    for {
+<span class="nc bnc" id="L104" title="All 2 branches missed.">      _ ← messageHandler.findDuplicatedName(form.name, project.dbid, Some(id))</span>
+<span class="nc" id="L105">      correctForm = messageHandler.adjustMsgForm(form)</span>
+<span class="nc" id="L106">      _ &lt;- messageHandler.determineTimeLegality(correctForm)</span>
+<span class="nc" id="L107">      _ ← messageHandler.validateMessageRunnable(form).fold(e ⇒ Future.failed(BadRequestException(e)), Future.successful)</span>
+<span class="nc" id="L108">      messageOpt ← pushMessageDao.findById(id, project.dbid)</span>
+<span class="nc" id="L109">      _ ← failCondition(messageOpt.isEmpty, NotFoundException(&quot;消息不存在&quot;))</span>
+    } yield {
+<span class="nc" id="L111">      context.copy(form = correctForm, message = messageOpt)</span>
+    }
+  }
+
+  /**
+   * 不能删除老的页面，因为移动端有缓存，老的页面可能还会被引用。
+   * 弹窗页面被编辑过，比如图片被替换了, 不需要重新创建指标。
+   * 因为提供给用户的是固定组件的模板，不存在组件增删的情况。
+   */
+  override def updateMessage(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L121">    val context = shape(c)</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">    val (form, project, userId) = context.parameters</span>
+<span class="nc" id="L123">    val message = context.getMessage</span>
+<span class="nc bnc" id="L124" title="All 8 branches missed.">    val firstUpdateToActivated = message.state == Status.draft &amp;&amp; form.isActivate</span>
+<span class="nc bnc" id="L125" title="All 16 branches missed.">    val source = if (message.state == Status.stop &amp;&amp; form.isActivate) &quot;来自下线弹窗&quot; else if (message.state == Status.draft &amp;&amp; form.isActivate) &quot;来自草稿&quot; else &quot;&quot;</span>
+<span class="nc" id="L126">    val filter = messageHandler.convertFormToFilter(form.audienceFilter)</span>
+<span class="nc" id="L127">    val updatedMsg = messageHandler.copyNewMessage(userId, message, form, None, None, filter)</span>
+    for {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">      pageUrl ← form.content match {</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        case Some(content) ⇒ messageContentHandler.updateContent(content, project, updatedMsg, userId)</span>
+<span class="nc" id="L131">        case _ ⇒ Future.successful(None)</span>
+      }
+<span class="nc" id="L133">      newMessage = messageHandler.copyNewMessage(userId, message, form, pageUrl, None, filter)</span>
+    } yield {
+<span class="nc" id="L135">      context.copy(message = Some(newMessage), from = source, firstUpdateToActivated = firstUpdateToActivated)</span>
+    }
+  }
+
+  override def updateRule(c: MessageContext): Future[MessageContext] = {
+<span class="nc" id="L140">    val context = shape(c)</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">    val (form, project, _) = context.parameters</span>
+<span class="nc" id="L142">    val message = context.getMessage</span>
+    for {
+<span class="nc bnc" id="L144" title="All 2 branches missed.">      products ← messageHandler.getProductsFromRuleForm(project.dbid, form.rule.get, form.platform)</span>
+<span class="nc" id="L145">      newRules = messageHandler.buildRulesFromForm(form, products, message)</span>
+<span class="nc bnc" id="L146" title="All 4 branches missed.">      oldRules ← pushRuleDao.findByMessageId(message.dbid)</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">      (needDeleted, needInserted, needUpdated) = messageHandler.diffRules(message, newRules, oldRules)</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">      activatedAtValue = if (context.firstUpdateToActivated) {</span>
+<span class="nc" id="L149">        Option(UTCNow)</span>
+      } else {
+<span class="nc" id="L151">        oldRules.headOption.flatMap(_.activateAt)</span>
+      }
+<span class="nc" id="L153">      _ ← updateMessageAndRules(</span>
+<span class="nc" id="L154">        message,</span>
+<span class="nc" id="L155">        rulesToCreate = needInserted.map(_.copy(activateAt = activatedAtValue)),</span>
+<span class="nc" id="L156">        needDeleted,</span>
+<span class="nc" id="L157">        rulesToUpdate = needUpdated.map(_.copy(activateAt = activatedAtValue)),</span>
+<span class="nc" id="L158">        oldRules = Some(oldRules))</span>
+    } yield {
+<span class="nc" id="L160">      context.copy(rules = Some(oldRules))</span>
+    }
+  }
+
+  override def afterUpdateHandle(c: MessageContext): Future[AppMessageContext] = {
+<span class="nc" id="L165">    val context = shape(c)</span>
+<span class="nc" id="L166">    val message = context.getMessage</span>
+<span class="nc" id="L167">    val rules = context.getRules</span>
+    for {
+<span class="nc" id="L169">      _ ← messageCacheManager.sendMessage(FLUSH_MESSAGE_CACHE, Json.toJson(FlushCacheMessage(message.ai, rules.map(_.urlScheme))).toString())</span>
+<span class="nc" id="L170">    } yield context.asInstanceOf[AppMessageContext]</span>
+  }
+
+  def updateMessageAndRules(
+    pushMessage: PushMessage,
+    rulesToCreate: Seq[PushRule],
+<span class="nc" id="L176">    rulesToDelete: Seq[PushRule] = Seq(),</span>
+<span class="nc" id="L177">    rulesToUpdate: Seq[PushRule] = Seq(),</span>
+<span class="nc" id="L178">    oldRules: Option[Seq[PushRule]] = None): Future[Unit] = {</span>
+
+<span class="nc" id="L180">    val newPushMessage = messageHandler.calState(pushMessage, rulesToCreate, rulesToUpdate)</span>
+<span class="nc" id="L181">    pushMessageDao.updateMsgMetricsRules(newPushMessage, rulesToCreate, rulesToDelete, rulesToUpdate, oldRules)</span>
+  }
+
+  override def shape(context: MessageContext): AppMessageContext = {
+<span class="nc" id="L185">    context.asInstanceOf[AppMessageContext]</span>
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>
